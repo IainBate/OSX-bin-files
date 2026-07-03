@@ -1,6 +1,6 @@
 rsync --archive --delete --times --verbose --no-links --delete-excluded --exclude="*.gdoc" --include="/*/.*" --exclude="/.*" --exclude ".fcpcache" --exclude "/.Trash" --exclude "/Library" --exclude "/My Drive" --exclude "/Google Drive" --exclude "/My Drive (iain.bate@york.ac.uk)" ~/ ~/My\ Drive/misc/Mac\ backup/
 cp -p ~/.zshrc ~/My\ Drive/misc/Mac\ backup/
-cp -p ~/.claude ~/My\ Drive/misc/Mac\ backup/claude_backup
+rsync --archive --delete --verbose --no-links --exclude=".git/" --exclude="cache/" --exclude="paste-cache/" --exclude="session-env/" --exclude="sessions/" --exclude="shell-snapshots/" --exclude="history.jsonl" ~/.claude/ ~/My\ Drive/misc/Mac\ backup/claude_backup/
 
 cp -av ~/Dropbox/Apps/Overleaf/Master\ files/references.bib ~/My\ Drive/misc/Mac\ backup/refer.bib
 
@@ -13,7 +13,7 @@ brew bundle dump --file=~/My\ Drive/misc/Mac\ backup/Brewfile
 cd ~/bin 2>/dev/null || cd /Users/ijb/bin 2>/dev/null
 git add -A 2>/dev/null
 git diff --cached --quiet 2>/dev/null || git commit -m "auto: $(date +%F)" 2>/dev/null
-# git push 2>/dev/null  # uncomment when you want auto-push
+git push 2>/dev/null
 
 # DATE=$(date "+%d_%m_%Y")
 # mkdir ~/WCET\ Confidence/auto_backup_of_routines/$DATE
