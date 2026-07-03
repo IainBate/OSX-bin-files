@@ -1,0 +1,15 @@
+DATE1=$(date +"%d_%m_%y")
+# sd_backup
+
+mkdir /Volumes/raw_photos/$DATE1/
+rsync --rsh=ssh --archive --delete --delete-excluded --verbose --times --exclude /RECYCLER --exclude /.fseventsd --exclude /.Trashes --exclude "/._.Trashes" --exclude "/System Volume Information" "/Volumes/Untitled/" /Volumes/raw_photos/$DATE1/
+
+mkdir /Volumes/files/tmp/$DATE1
+mkdir //Volumes/files/tmp/$DATE1/photos/
+mkdir /Volumes/files/tmp/$DATE1/videos/
+find /Volumes/raw_photos/$DATE1/ -name "*.JPG" -exec cp -av {} /Volumes/files/tmp/$DATE1/photos/ \;
+find /Volumes/raw_photos/$DATE1/ -name "*.MOV" -exec cp -av {} /Volumes/files/tmp/$DATE1/videos/ \;
+cp -a ~/Dropbox/bin/*olympus* /Volumes/files/tmp/$DATE1/videos/
+rsync --rsh=ssh --archive --delete --verbose --times /Volumes/files/tmp/$DATE1/videos/ ~/recent_photos/$DATE1/
+
+# rsync --rsh=ssh --archive --delete --verbose --times ijb@imolafoo://n/sebase/ijb/videos/*.mp4 /Volumes/Other/tmp/$DATE1/videos/ 

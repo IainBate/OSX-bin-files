@@ -1,0 +1,2 @@
+/Users/ijb/bin/rsync_modified $* --rsh=ssh --archive --delete --verbose --times /Users/ijb/Documents/ ijb@headfoo://local/d0p3/ijb/backup/my_documents/
+/Users/ijb/bin/rsync_modified $* --rsh=ssh --archive --delete --verbose --times /Users/ijb/Dropbox/ ijb@headfoo://local/d0p3/ijb/backup/dropbox/

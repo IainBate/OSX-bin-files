@@ -1,0 +1,1 @@
+/Users/ijb/bin/rsync_modified $* --rsh=ssh --archive --delete --verbose --delete-excluded --times --exclude *.o --exclude /main.dSYM --exclude /RTA.xcodeproj --exclude /build --exclude /RTA/Old --exclude /RTA/results --exclude /RTA/OldCode /Users/ijb/Dropbox/ns2/ns-2.34/stress_test/ ijb@headfoo://n/sebase/ijb/ns2/src/ns-2.34/stress_test/

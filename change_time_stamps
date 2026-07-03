@@ -1,0 +1,5 @@
+for file in *.JPG; do python ~ijb/bin/copy_time_stamps.py "`find /Volumes/files/ -name "$file"`" "$file" ; done
+for file in *.mp4; do python ~ijb/bin/copy_time_stamps.py "`find /Volumes/files/ -name "$file"`" "$file" ; done
+for file in *.mov; do python ~ijb/bin/copy_time_stamps.py "`find /Volumes/files/ -name "$file"`" "$file" ; done
+for file in *.mov; do python ~ijb/bin/copy_time_stamps.py "`find /Volumes/files/ -name "`echo $file|sed "s/ copy././"`" "$file" ; done
+

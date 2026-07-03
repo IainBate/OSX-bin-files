@@ -1,0 +1,2 @@
+rsync --rsh=ssh --archive --delete --delete-excluded --verbose --times --copy-links --copy-dirlinks /Volumes/Other/photos/ /Volumes/Home/photos/
+rsync --rsh=ssh --archive --delete --delete-excluded --verbose --times --copy-links --copy-dirlinks /Volumes/Other/videos/ /Volumes/Home/videos/

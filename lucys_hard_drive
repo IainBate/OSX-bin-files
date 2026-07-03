@@ -1,0 +1,6 @@
+echo "Films"
+nice -n 20 rsync --verbose --progress --archive --times --delete-excluded --exclude "/Our Family" pi@192.168.68.206://mnt/HDD/films/ /Volumes/Lucy/films/ 
+
+echo "Music"
+nice -n 20 rsync --verbose --progress --archive --times ~/Music/iTunes/iTunes\ Media/  /Volumes/Lucy/music/
+

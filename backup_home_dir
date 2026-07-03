@@ -1,0 +1,10 @@
+echo ""
+echo "Archiving files"
+nice -n 20 tar c --exclude="/Users/ijb/MOCHA repository" --exclude="/Users/ijb/Dropbox" --exclude="/Users/ijb/Library" --exclude="/Users/ijb/.Trash" --exclude="/Users/ijb/Google Drive" --exclude="/Users/ijb/Movies" --exclude="/Users/ijb/Pictures/" --exclude="/Users/ijb/compiled_videos" --exclude="/Users/ijb/Downloads" /Users/ijb |  xz -c - >~/Downloads/archive_of_usr_ijb.tar.xz 
+nice -n 20 tar cf ~/Downloads/Movies.tar /Users/ijb/Movies
+nice -n 20 tar cf ~/Downloads/Pictures.tar /Users/ijb/Pictures
+nice -n 20 tar cf ~/Downloads/compiled_videos.tar /Users/ijb/compiled_videos
+
+echo "Moving the files"
+mv ~/Downloads/*.ta* ~/Google\ Drive/My\ Drive/misc/
+

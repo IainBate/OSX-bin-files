@@ -1,0 +1,25 @@
+#!/bin/sh
+
+function deport {
+  port="$1"
+
+  if port dependents "$port"|grep "depends on $port"; then
+    # depth-first traversal of dependents
+    port dependents "$port"|awk ‘/depends on/ {print $1}’|while read dependent; do  
+        deport "$dependent"
+    done
+  fi
+  # make sure no more dependents
+  if port dependents "$port"|grep "$port has no dependents\!"; then
+    echo "port uninstall $port"
+    port uninstall "$port"
+  fi
+}
+
+if [ -z "$1" ]; then
+  echo "Usage:"
+  echo "  deport.sh <portname>"
+else
+  deport "$1"
+fi
+

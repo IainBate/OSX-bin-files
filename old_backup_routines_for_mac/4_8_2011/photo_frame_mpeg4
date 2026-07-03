@@ -1,0 +1,2 @@
+ffmpeg -i $1 -vcodec mpeg4 -acodec libmp3lame -ar 48000 -ab 128k -s vga -b 750k $2
+

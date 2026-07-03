@@ -1,0 +1,1 @@
+nice -n 20 find . -name "*.wmv" -exec ~/bin/convert_wmv_to_mpg {} \; >/dev/null

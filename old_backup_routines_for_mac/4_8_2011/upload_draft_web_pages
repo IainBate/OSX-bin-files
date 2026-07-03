@@ -1,0 +1,1 @@
+rsync --rsh=ssh --archive --delete --verbose --times /Users/ijb/shared/web_pages/draft/ ijb@linux.cs.york.ac.uk://n/www/usr/ijb/ 

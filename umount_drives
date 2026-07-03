@@ -1,0 +1,5 @@
+umount "/Volumes/Windows Backup - Lucy"
+umount "/Volumes/Windows Backup - Kate"
+umount "/Volumes/CARAVAN"
+umount "/Volumes/Time Machine - Home"
+

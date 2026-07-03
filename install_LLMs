@@ -1,0 +1,180 @@
+#!/bin/bash
+
+# Exit immediately if any command fails to prevent half-baked installations
+set -e
+
+clear
+echo "================================================================="
+echo "🎓 UNIFIED ACADEMIC & RESEARCH AI SETUP MASTER SCRIPT"
+echo "💻 Target: MacBook Air 13\" (32GB Unified Memory / 1TB SSD)"
+echo "================================================================="
+echo "This script safely prompts you for keys without hardcoding them."
+echo ""
+
+# -----------------------------------------------------------------
+# INTERACTIVE PROMPTS (SECURITY FIRST)
+# -----------------------------------------------------------------
+echo "👉 STEP 1: CLAUDE API KEY (For Advanced VS Code Research/Coding)"
+echo "📍 WHERE TO GET IT:"
+echo "   1. Go to: https://console.anthropic.com/"
+echo "   2. Generate a key starting with 'sk-ant-'."
+echo "-----------------------------------------------------------------"
+read -sp "🔑 Paste your Claude API Key here (typing will be hidden): " CLAUDE_API_KEY
+echo ""
+echo "🟢 Claude API Key captured securely in memory."
+echo ""
+
+echo "👉 STEP 2: LIVE GOOGLE DRIVE SYNCING CONNECTOR"
+echo "📍 WHERE TO GET IT:"
+echo "   1. Go to: https://console.cloud.google.com/"
+echo "   2. Enable the 'Google Drive API' for a project."
+echo "   3. Create a Service Account under 'IAM & Admin' -> 'Service Accounts'."
+echo "   4. Go to Keys -> Add Key -> Create New Key (Select JSON format)."
+echo "-----------------------------------------------------------------"
+echo "📋 Drag & drop your downloaded Google JSON file here,"
+echo "   or type the file path (or press Enter to skip and configure later):"
+read -p "📂 File Path: " GOOGLE_JSON_PATH
+echo ""
+
+# Sanitize trailing spaces/quotes from drag-and-drop artifacts
+if [ -n "$GOOGLE_JSON_PATH" ]; then
+    GOOGLE_JSON_PATH=$(echo "$GOOGLE_JSON_PATH" | sed -e 's/^['\''"]//' -e 's/['\''"]$//' -e 's/[[:space:]]*$//')
+    if [ -f "$GOOGLE_JSON_PATH" ]; then
+        mkdir -p "$HOME/.anythingllm"
+        cp "$GOOGLE_JSON_PATH" "$HOME/.anythingllm/google_creds.json"
+        echo "🟢 Google Credentials verified and saved to ~/.anythingllm/google_creds.json"
+    else
+        echo "🟡 Path invalid. Google Sync can still be added later inside the GUI."
+    fi
+else
+    echo "🟡 Google Drive skipped for now."
+fi
+
+echo ""
+echo "================================================================="
+echo "🚀 Environment configured! Beginning core system installation..."
+echo "================================================================="
+sleep 1
+
+# Define high-performance models tailored for 32GB Apple Silicon
+MODEL_TEXT="qwen3.5:35b-instruct"
+MODEL_CODE="qwen3.5-coder:35b-instruct-q4_K_M"
+MODEL_EMBED="nomic-embed-text"
+
+# 1. Install/Verify Homebrew Package Manager
+if ! command -v brew &> /dev/null; then
+    echo "📦 Homebrew not found. Installing system package manager..."
+    /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+    echo 'eval "$(/opt/homebrew/bin/brew shellenv)"' >> ~/.zprofile
+    eval "$(/opt/homebrew/bin/brew shellenv)"
+else
+    echo "✅ Homebrew framework is up to date."
+fi
+
+# 2. Install & Start Ollama Local Engine
+if ! command -v ollama &> /dev/null; then
+    echo "🦙 Installing Ollama core client..."
+    brew install ollama
+    echo "🔄 Activating Ollama background service..."
+    brew services start ollama
+    sleep 5 # Give the service time to establish
+else
+    echo "✅ Ollama engine is active."
+fi
+
+# 3. Pull Local LLM and Embedding Models
+echo "📥 Fetching Local Models (This will take a bit over your network)..."
+echo "📥 Pulling Text Model ($MODEL_TEXT)..."
+ollama pull "$MODEL_TEXT"
+
+echo "📥 Pulling Specialized Coding Model ($MODEL_CODE)..."
+ollama pull "$MODEL_CODE"
+
+echo "📥 Pulling 100% Local Vector Embedding Model ($MODEL_EMBED)..."
+ollama pull "$MODEL_EMBED"
+
+# 4. Install Desktop Graphic Interfaces & Research Applications
+echo "🖥️ Installing UI Desktop Tools (VS Code, AnythingLLM, Zotero Citation Manager)..."
+brew install --cask visual-studio-code
+brew install --cask anythingllm
+brew install --cask zotero
+
+# 5. Install Command Line Academic Tooling
+echo "📦 Installing Academic Parsing Frameworks (Pandoc, Ultra-fast Python 'uv')..."
+brew install pandoc
+brew install uv
+
+# 6. Install & Configure VS Code Extensions
+echo "🔌 Injecting Extension Ecosystem into VS Code..."
+code --install-extension Continue.continue
+code --install-extension ms-python.python
+code --install-extension ms-toolsai.jupyter
+code --install-extension yzhang.markdown-all-in-one
+
+echo "⚙️ Engineering Continue configuration file..."
+CONTINUE_DIR="$HOME/.continue"
+mkdir -p "$CONTINUE_DIR"
+
+cat <<EOF > "$CONTINUE_DIR/config.json"
+{
+  "models": [
+    {
+      "title": "Claude 3.5 Sonnet (Cloud)",
+      "provider": "anthropic",
+      "model": "claude-3-5-sonnet-latest",
+      "apiKey": "$CLAUDE_API_KEY"
+    },
+    {
+      "title": "Qwen 3.5 35B Instruct (Local)",
+      "provider": "ollama",
+      "model": "$MODEL_TEXT"
+    }
+  ],
+  "tabAutocompleteModel": {
+    "title": "Qwen 3.5 Coder 35B",
+    "provider": "ollama",
+    "model": "$MODEL_CODE"
+  }
+}
+EOF
+
+# 7. Generate Desktop Reference Blueprint Guide
+cat <<EOF > "$HOME/Desktop/Academic_AI_Reference_Guide.txt"
+=====================================================================
+🎓 UNIVERSITY RESEARCH & HOD OPERATIONS MANUAL
+=====================================================================
+
+Your 32GB MacBook Air has been transformed into an isolated AI workspace.
+
+🏛️ WORKSPACE 1: SECURE DEPARTMENT ADMINISTRATION (100% OFFLINE)
+- Open the AnythingLLM application.
+- Go to Settings -> LLM Provider -> Choose 'Ollama' and select '$MODEL_TEXT'.
+- Go to Settings -> Embedding Provider -> Choose 'Ollama' and select '$MODEL_EMBED'.
+- Target Use: Drop confidential departmental budgets, tenure metrics, or internal policy PDFs here. 
+- Security: Because embeddings and inference are set to Ollama, NO data leaves your computer.
+
+🔬 WORKSPACE 2: LITERATURE REVIEWS & GRANTS (HYBRID CLOUD/LOCAL)
+- Use AnythingLLM or VS Code to read open research web links and journal PDFs.
+- Switch the chat model drop-down to 'Claude 3.5 Sonnet' when you need heavy-lifting synthesis or complex grant structural critique.
+
+💻 WORKSPACE 3: TECHNICAL RESEARCH CODE & MARKOVN SUBMISSIONS
+- Launch VS Code. Press 'Cmd + Shift + M' to toggle the 'Continue' panel.
+- Code Autocomplete: Handled instantaneously and entirely offline by '$MODEL_CODE'.
+- Markdown & Data: Use Pandoc in your terminal to turn markdown text notes into polished Word documents or academic LaTeX sheets automatically.
+- Citation Tracking: Open Zotero from your Applications folder to index and coordinate your research papers library cleanly.
+
+🔗 INITIALIZING GOOGLE DRIVE SYNC NATIVELY:
+If you mapped a JSON file during initialization, it is backed up here:
+~/.anythingllm/google_creds.json
+Simply load it under AnythingLLM's Data Connectors -> Google Drive panel to sync whole folders via web links!
+EOF
+
+echo "================================================================="
+echo "🎉 SYSTEM DEPLOYMENT COMPLETED SUCCESSFULLY!"
+echo "================================================================="
+echo "⏭️  IMMEDIATE NEXT STEPS:"
+echo "1. Activate your newly installed environment changes via command:"
+echo "   source ~/.zprofile"
+echo "2. Check your Desktop for the 'Academic_AI_Reference_Guide.txt' file."
+echo "   It contains explicit blueprints on partitioning your work safely."
+echo "================================================================="

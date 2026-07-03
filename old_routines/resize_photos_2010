@@ -1,0 +1,1 @@
+mogrify -resize 1280x720 -background black -gravity center -extent 1280x720 "$1"

@@ -1,0 +1,2 @@
+pdf2ps "$1" /Users/ijb/Downloads/temp.ps
+ps2pdf /Users/ijb/Downloads/temp.ps" $1"

@@ -1,0 +1,15 @@
+#!/bin/sh
+WORK_IP_REGEX="^144\.32\."
+
+IP_ADDRESSES=$(/sbin/ifconfig | grep "inet " | sed "s/.*inet \([^ ]*\).*$/\1/")
+#IP_ADDRESSES=$(echo -e "127.0.0.1\n144.32.10.10"$)
+for IP in $IP_ADDRESSES; do
+        IS_WORK_IP=$(echo $IP | grep $WORK_IP_REGEX)
+        if [[ -n $IS_WORK_IP ]]; then
+		if mount | grep -q "External HD"; then rsync --rsh=ssh --archive --delete --verbose --times ijb@linux.cs.york.ac.uk://n/www/usr/ijb/ "/Users/ijb/Documents/web_pages/current/" ; fi
+		/Users/ijb/bin/shared_backup $*
+		/Users/ijb/bin/mail_backup $*
+		/Users/ijb/bin/my_docs_backup $*
+		rsync --rsh=ssh --archive --delete --verbose --times /Users/ijb/Library/Application\ Support/Evernote/data/ ijb@headfoo:/local/d0p3/ijb/backup/evernote_content/ 
+	fi
+done

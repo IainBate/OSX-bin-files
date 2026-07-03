@@ -1,0 +1,27 @@
+laptop_name=$(system_profiler 2>/dev/null |grep "Serial Number (system)"| sed "s/Serial Number (system): //"|sed "s/^[[:space:]]*//")
+echo "Laptop name is" $laptop_name
+
+if [[ $laptop_name == "C02T5G02GTFJ" ]]
+then 
+	echo "New Laptop"
+
+	caffeinate -i rsync -rptgoD --no-owner --no-perms --no-group --verbose --progress --delete --delete-excluded --exclude /Dropbox --exclude /.virtualenvs --exclude /recent_photos --exclude /photos --exclude /Library/Mail --exclude /Library/Calendars --exclude /Library/Caches --exclude .DS_Store --exclude /.Trash --exclude ".dropbo*" --exclude .svn --exclude /Library/Saved\ Application\ State --exclude /Library/Application\ Support --exclude /Library/Containers --exclude /Library/Mobile\ Documen* --exclude /Downloads --exclude /GNAT /Users/ijb/ /Volumes/GoogleDrive/My\ Drive/Archive/Home_MBP/
+
+#	caffeinate -i rsync -rptgoD --no-owner --no-perms --no-group --verbose --progress --delete --delete-excluded --exclude /Dropbox --exclude /.virtualenvs --exclude "/Lucy and Emily - 2017" --exclude /recent_photos --exclude /photos --exclude /Library/Mail --exclude /Library/Calendars --exclude /Library/Caches --exclude .DS_Store --exclude /.Trash --exclude ".dropbo*" --exclude .svn --exclude /Library/Saved\ Application\ State --exclude /Library/Application\ Support --exclude /Library/Mobile\ Documen* --exclude /Downloads /Users/ijb/ /Volumes/GoogleDrive/My\ Drive/Archive/Home_MBP/
+
+#	caffeinate -i rsync -rptgoD --verbose --progress --delete "/Users/ijb/Lucy and Emily - 2017/" /Volumes/GoogleDrive/My\ Drive/Archive/Lucy\ and\ Emily\ -\ 2017/
+fi
+
+
+if [[ $laptop_name == "C02J2DJ0DKQ1" ]]
+then
+	echo "Office Laptop" 
+	caffeinate -i rsync -rptgoD --no-owner --no-perms --no-group --verbose --progress --delete --delete-excluded --exclude /.virtualenvs --exclude /recent_photos --exclude /photos --exclude /Library/Mail --exclude /Library/Calendars --exclude /Library/Caches --exclude .DS_Store --exclude /.Trash --exclude ".dropbo*" --exclude .svn --exclude /Library/Saved\ Application\ State --exclude /Library/Application\ Support --exclude /Library/Containers --exclude /Library/Mobile\ Documen* --exclude /Downloads --exclude /GNAT /Users/ijb/ /Volumes/GoogleDrive/My\ Drive/Archive/Office_MBP/
+
+	caffeinate -i rsync -rptgoD --no-owner --no-perms --no-group --verbose --progress --delete --delete-excluded /Volumes/Archive/compiled_videos/ /Volumes/GoogleDrive/My\ Drive/Home/compiled_videos/
+
+	caffeinate -i rsync -rptgoD --no-owner --no-perms --no-group --verbose --progress --delete --delete-excluded /Volumes/Archive/photos/ /Volumes/GoogleDrive/My\ Drive/Home/photos/
+
+	caffeinate -i rsync -rptgoD --no-owner --no-perms --no-group --verbose --progress --delete --delete-excluded --exclude /.Spotlight-V100 --exclude /RECYCLER --exclude /.fseventsd --exclude /.Trashes --exclude "/._.Trashes" --exclude "/System Volume Information" /Volumes/Archive/Work/ /Volumes/GoogleDrive/My\ Drive/Archive/External_HD/
+fi
+

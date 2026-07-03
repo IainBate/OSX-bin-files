@@ -1,0 +1,8 @@
+if [[ $1 == *.mp3 ]]       #  this is the snag
+              then
+                     nice -n 20 ffmpeg -i "$1" -map 0:a:0 -q:a 4 tmp.mp3; mv tmp.mp3 "$1"
+              fi
+if [[ $1 == *.m4a ]]       #  this is the snag
+              then
+                     nice -n 20 ffmpeg -i "$1" -map 0:a:0 -q:a 4 tmp.m4a; mv tmp.m4a "$1"
+              fi

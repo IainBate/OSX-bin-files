@@ -1,0 +1,1 @@
+ffmpeg -i "$1" -vcodec wmv2 -acodec wmav2 -sameq "`echo $1|sed "s/.mp4/.wmv/"`"

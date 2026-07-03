@@ -1,0 +1,1 @@
+rsync --rsh=ssh --archive --delete --delete-excluded --verbose --times --exclude /.Trashes "/Volumes/Time Machine - USA/" ijb@linux.cs.york.ac.uk://n/staffstore/ijb/backup/time_machine1/

@@ -1,0 +1,10 @@
+#!/bin/sh
+if /sbin/mount | grep -q "Time Machine"; then 
+	rsync --rsh=ssh --archive --delete --verbose --times ijb@linux.cs.york.ac.uk://n/www/usr/ijb/ "/Users/ijb/Documents/web_pages/current/"
+#	rsync --rsh=ssh --archive --delete --verbose --times /Users/ijb/ns2/ ijb@headfoo://local/d0p3/ijb/backup/ns2/
+	rsync --rsh=ssh --archive --delete --verbose --times ijb500@csresearch1.cs.york.ac.uk://shared/rentedfs/cs-course/crsy/ "/Users/ijb/Documents/lecturing_stuff/CRS/web_pages/"
+	/Users/ijb/bin/shared_backup $*
+	/Users/ijb/bin/mail_backup $*
+	/Users/ijb/bin/my_docs_backup $*
+	rsync --rsh=ssh --archive --delete --verbose --times /Users/ijb/Library/Application\ Support/Evernote/data/ ijb@headfoo:/local/d0p3/ijb/backup/evernote_content/ 
+fi

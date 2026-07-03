@@ -1,0 +1,1 @@
+rsync_modified --rsh=ssh --archive --delete --delete-excluded --verbose --times --exclude Cache --exclude global-messages-db.sqlite /Users/ijb/Mail/ ijb@linux.cs.york.ac.uk://n/staffstore/ijb/backup/Mail/

@@ -1,0 +1,1 @@
+ffmpeg -i X.avi -b 7500k -ab 128k -vcodec libx264 -vpre default X.mp4

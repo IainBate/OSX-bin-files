@@ -1,0 +1,1 @@
+rsync --rsh=ssh --archive --delete --delete-excluded --verbose --times --exclude /RECYCLER --exclude /.fseventsd --exclude /.Trashes --exclude "/._.Trashes" --exclude "/System Volume Information" "/Volumes/NO NAME/" /Users/ijb/tmp/raw/current/phone/

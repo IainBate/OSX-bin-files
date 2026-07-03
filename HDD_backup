@@ -1,0 +1,9 @@
+rsync -r --size-only --progress --delete --delete-excluded --exclude "*DS_Store*" --exclude /compiled_videos --exclude /photos --exclude /other_photos --exclude /files --exclude "/Go Pros" --exclude /lost+found --exclude /olympus_tg4 --exclude /iPhones pi@192.168.5.206://mnt/HDD/ /Volumes/Archive/from_HDD/
+
+# rsync -r --size-only --progress --delete --delete-excluded --exclude "*DS_Store*" pi@192.168.5.206://mnt/HDD/films/ /Volumes/Archive/films/
+# rsync -r --size-only --progress --delete --delete-excluded --exclude "*DS_Store*" pi@192.168.5.206://mnt/HDD/tmp/ /Volumes/Archive/tmp_from_HDD/
+# rsync -r --size-only --progress --delete --delete-excluded --exclude "*DS_Store*" pi@192.168.5.206://mnt/HDD/iTunes/ /Volumes/Archive/iTunes/
+
+# caffeinate -i rsync --progress -r --size-only --verbose --delete --delete-excluded --max-size=4GB --exclude "*DS_Store*" --exclude /.minidlna --exclude *3D.* --exclude "/original 3D films" /Volumes/share/films/ /Volumes/CARAVAN/
+
+# rsync --progress --recursive --update --times --verbose --delete --delete-excluded --modify-window=10 --max-size=4GB --exclude "*DS_Store*" --exclude /.minidlna --exclude *3D.* --exclude "/original 3D films" "/Volumes/films/" /Volumes/CARAVAN/

@@ -1,0 +1,5 @@
+caffeinate -i rsync -rptgoD --verbose --progress --delete-excluded --exclude /.virtualenvs --exclude /recent_photos --exclude /photos --exclude /Library/Mail --exclude /Library/Calendars --exclude /Library/Caches --exclude .DS_Store --exclude /.Trash --exclude ".dropbo*" --exclude .svn --exclude /Library/Saved\ Application\ State --exclude /Library/Application\ Support --exclude /Library/Mobile\ Documen* --exclude /Downloads /Users/ijb/ /Volumes/GoogleDrive/My\ Drive/Archive/Office_MBP/
+
+caffeinate -i rsync --rsh=ssh --progress --archive --delete --delete-excluded --verbose --times /Volumes/Archive/compiled_videos/ /Volumes/GoogleDrive/My\ Drive/Home/compiled_videos/
+
+caffeinate -i rsync --rsh=ssh --progress --archive --delete --delete-excluded --verbose --times --exclude /.Spotlight-V100 --exclude /RECYCLER --exclude /.fseventsd --exclude /.Trashes --exclude "/._.Trashes" --exclude "/System Volume Information" /Volumes/Archive/Work/ /Volumes/GoogleDrive/My\ Drive/Archive/External_HD/

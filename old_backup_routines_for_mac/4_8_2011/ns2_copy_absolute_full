@@ -1,0 +1,1 @@
+/Users/ijb/bin/rsync_modified $* --rsh=ssh --archive --delete --verbose --times /Users/ijb/Dropbox/ns2/ ijb@headfoo://n/sebase/ijb/ns2/src/

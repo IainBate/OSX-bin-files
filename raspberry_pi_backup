@@ -1,0 +1,2 @@
+# rsync --rsh=ssh -rptgoD --no-owner --no-perms --no-group --verbose --progress --copy-links pi@144.32.50.117://home/pi/taco/ ~/Google\ Drive\ File\ Stream/My\ Drive/misc/study_leave/2017_18/Rolls\ Royce\ TACO/Raspberry\ PI\ backup/
+rsync --rsh=ssh -rptgoD --no-owner --no-perms --no-group --verbose --progress pi@144.32.50.117://home/pi/taco/ ~/Google\ Drive\ File\ Stream/My\ Drive/misc/study_leave/2017_18/Rolls\ Royce/Raspberry\ PI\ backup/

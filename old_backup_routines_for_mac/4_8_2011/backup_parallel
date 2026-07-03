@@ -1,0 +1,5 @@
+rsync --rsh=ssh --archive --delete --verbose --times ijb@linux.cs.york.ac.uk://n/www/usr/ijb/ /Users/ijb/shared/web_pages/current/ 
+
+xterm -e /Users/ijb/Documents/backup_routines/my_docs_backup_rsync.bat &
+xterm -e /Users/ijb/Documents/backup_routines/mail_backup_rsync.bat &
+/Users/ijb/Documents/backup_routines/shared_backup_rsync.bat

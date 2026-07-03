@@ -1,0 +1,2 @@
+for file in *.mp4; do cp -av "$file" "`find /Volumes/Other/compiled_videos_of_Lucy_and_Emily/2009/ -name "$file"`" ; done
+

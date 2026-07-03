@@ -1,0 +1,35 @@
+mkdir /tmp/lecture_slides
+mkdir /tmp/lecture_slides/CRSY
+mkdir /tmp/lecture_slides/CRSY/BBC_videos
+mkdir /tmp/lecture_slides/CRSY/seminars
+mkdir /tmp/lecture_slides/SYAR
+mkdir /tmp/lecture_slides/ARTS
+
+# CRSY
+rsync --rsh=ssh --archive --delete --verbose --times /Volumes/GoogleDrive/My\ Drive/lecturing_stuff/archive_material/CRS/BBC_videos/*.mp4 /tmp/lecture_slides/CRSY/BBC_videos/
+rsync --rsh=ssh --archive --delete --verbose --times /Volumes/GoogleDrive/My\ Drive/lecturing_stuff/CRS/L*.pptx /tmp/lecture_slides/CRSY/
+rsync --rsh=ssh --archive --delete --verbose --times /Volumes/GoogleDrive/My\ Drive/lecturing_stuff/CRS/seminars/ /tmp/lecture_slides/CRSY/seminars/
+
+# SYAR
+cp -a /Volumes/GoogleDrive/My\ Drive/lecturing_stuff/SYA/Architectural_Views.p* /tmp/lecture_slides/SYAR/
+cp -a /Volumes/GoogleDrive/My\ Drive/lecturing_stuff/SYA/Scenarios_for_industrial_example.xlsx /tmp/lecture_slides/SYAR/
+rsync --rsh=ssh --archive --delete --verbose --times /Volumes/GoogleDrive/My\ Drive/lecturing_stuff/SYA/S*.p* /tmp/lecture_slides/SYAR/
+rsync --rsh=ssh --archive --delete --verbose --times /Volumes/GoogleDrive/My\ Drive/lecturing_stuff/SYA/P*.d* /tmp/lecture_slides/SYAR/
+
+# ARTS
+# rsync --rsh=ssh --archive --delete --verbose --times --delete-excluded --exclude "Ico*" ~/Google\ Drive\ File\ Stream/Team\ Drives/ARTS\ Practicals/ ~/Google\ Drive\ File\ Stream/My\ Drive/lecturing_stuff/ARTS/Practicals/
+find ~/Google\ Drive\ File\ Stream/Team\ Drives/ARTS\ Practicals -maxdepth 1 -mindepth 1 -type d -not -name ".*" -print0| xargs -L 1 -0 basename  | while read dir
+do
+	echo "Directory" $dir
+	rsync --rsh=ssh --progress --archive --delete --delete-excluded --verbose --times "/Users/ijb/Google Drive File Stream/Team Drives/ARTS Practicals/$dir/" "/Users/ijb/Google Drive File Stream/My Drive/lecturing_stuff/ARTS/Practicals/$dir/"
+done
+
+# cd /Volumes/GoogleDrive/My\ Drive/lecturing_stuff/ARTS 
+# cp -av /Volumes/GoogleDrive/My\ Drive/lecturing_stuff/ARTS/*.p* /tmp/lecture_slides/ARTS/
+# rsync --rsh=ssh --archive --delete --verbose --times --delete-excluded --exclude /o* *.ppt /tmp/lecture_slides/ARTS/
+# rsync --rsh=ssh --archive --delete --verbose --times --delete-excluded --exclude /o* *.pptx /tmp/lecture_slides/ARTS/
+rsync --rsh=ssh --archive --delete --verbose --times --delete-excluded --exclude /o* /Volumes/GoogleDrive/My\ Drive/lecturing_stuff/ARTS/*.p* /tmp/lecture_slides/ARTS/
+rsync --rsh=ssh --archive --delete --verbose --times --delete-excluded --exclude "/other stuff" --exclude "Ico*" /Volumes/GoogleDrive/My\ Drive/lecturing_stuff/ARTS/Practicals/ /tmp/lecture_slides/ARTS/Practicals/
+
+rsync --rsh=ssh --archive --delete --verbose --times /tmp/lecture_slides/ ijb500@csresearch1.york.ac.uk://usr/userfs/i/ijb500/w2k/Desktop/
+

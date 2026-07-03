@@ -1,0 +1,9 @@
+~/Dropbox/bin/rclone/rclone sync /Volumes/films/ Drive:Home/films/
+~/Dropbox/bin/rclone/rclone dedupe --dedupe-mode newest Drive:Home/films/
+
+~/Dropbox/bin/rclone/rclone sync --exclude /misc/stuff.dmg /Volumes/files/ Drive:Home/files/
+~/Dropbox/bin/rclone/rclone dedupe --dedupe-mode newest Drive:Home/files/
+
+~/Dropbox/bin/rclone/rclone sync /Volumes/My\ Music/ Drive:Home/My\ Music/
+~/Dropbox/bin/rclone/rclone dedupe --dedupe-mode newest Drive:Home/My\ Music/
+

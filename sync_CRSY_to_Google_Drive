@@ -1,0 +1,3 @@
+rsync --archive --delete --verbose --delete-excluded ~/Documents/TurningPoint/Content/CRSY/ ~/CRSY/TurningPoint/
+rsync --archive --verbose --exclude "talk_topics.*" --exclude "*.rtf" --exclude "*exam*"  ~/CRSY/ /Volumes/GoogleDrive/My\ Drive/lecturing_stuff/CRSY/
+find /Volumes/GoogleDrive/My\ Drive/lecturing_stuff/CRSY/ -name "~*" -exec rm -rf {} \;

@@ -1,0 +1,5 @@
+find "$1" -iname '*.JPG' | while read PIC; do
+    DATE1=$(echo "$PIC" | sed 's/JPG/MOV/')
+    rm $DATE1
+done
+

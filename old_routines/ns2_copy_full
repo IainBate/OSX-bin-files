@@ -1,0 +1,1 @@
+/Users/ijb/bin/rsync_modified $* --rsh=ssh --archive --delete --delete-excluded --verbose --times --exclude *.o  --exclude /lib --exclude /include --exclude /bin --exclude /tclcl --exclude /otcl --exclude /share --exclude "/ns-2.34_4_10_2011.tbz" /Users/ijb/ns2/ ijb@headfoo://n/sebase/ijb/ns2/src/

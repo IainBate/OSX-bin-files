@@ -1,0 +1,27 @@
+rsync --archive --delete --times --verbose /Users/ijb/compiled_videos/ /Volumes/Other\ Data/compiled_videos/
+
+/Users/ijb/bin/safeguards
+
+# /Users/ijb/bin/backup_home_dir
+
+
+# caffeinate -i nice -n 20 rclone --transfers 8 --checkers 8 --tpslimit 8 --tpslimit-burst 8 --drive-chunk-size 64M --retries 10 --fast-list --verbose sync /Volumes/Archive/usr_folder/ gdrive:Archive/usr_folder/
+
+# caffeinate -i nice -n 20 rclone --transfers 8 --checkers 8 --tpslimit 8 --tpslimit-burst 8 --drive-chunk-size 64M --retries 10 --fast-list --verbose sync /Volumes/Archive/Home_MBP/ gdrive:Archive/Home_MBP/
+
+# caffeinate -i nice -n 20 rclone --transfers 8 --checkers 8 --tpslimit 8 --tpslimit-burst 8 --drive-chunk-size 64M --retries 10 --fast-list --verbose sync /Volumes/Archive/Work/ gdrive:Archive/External_HD/Work/
+
+# caffeinate -i nice -n 20 rclone --transfers 8 --checkers 8 --tpslimit 8 --tpslimit-burst 8 --drive-chunk-size 64M --retries 10 --fast-list --verbose sync /Volumes/Archive/Samuel/ gdrive:Archive/External_HD/Samuel/
+
+# rsync --archive --delete --verbose --delete-excluded --exclude /.Trash --exclude /Library --exclude /Pictures --exclude ~/Music --exclude ~/compiled_videos  ~/ /Volumes/Archive/MBP/
+
+# rsync --archive --delete --verbose ~/Music/ /Volumes/Archive/Music/
+
+# rsync --archive --delete --verbose ~/compiled_videos/ /Volumes/Archive/compiled_videos/
+
+# rsync --archive --delete --verbose ~/svns/ /Volumes/Archive/svns/
+
+# rsync --archive --delete --verbose ~/Google\ Drive/My\ Drive/personal/compiled_videos/ /Volumes/Archive/compiled_videos/
+# rsync --archive --delete ~/compiled_videos/ ~/Google\ Drive/My\ Drive/personal/compiled_videos/
+
+# caffeinate -i nice -n 20 rclone --transfers 8 --checkers 8 --tpslimit 8 --tpslimit-burst 8 --drive-chunk-size 64M --retries 10 --fast-list --verbose sync /Volumes/Archive/compiled_videos/ gdrive:Archive/External_HD/compiled_videos/

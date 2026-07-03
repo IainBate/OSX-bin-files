@@ -1,0 +1,3 @@
+#!/bin/sh
+killall eapolclient
+echo "Hello" > /tmp/wakeup

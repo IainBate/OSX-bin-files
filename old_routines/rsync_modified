@@ -1,0 +1,26 @@
+#!/bin/sh
+# If any of OSX's IPV4 IP addresses starts with 144.32.
+# EXTRA_RSYNC_OPTIONS will be empty, otherwise it will have
+# --bwlimit=220 in it.
+WORK_IP_REGEX="^144\.32\."
+EXTRA_RSYNC_OPTIONS=" --bwlimit=10"
+while getopts ":f" OPTION 
+do
+	case $OPTION in
+	 	f)
+			EXTRA_RSYNC_OPTIONS=" "
+			shift $(($OPTIND - 1))
+			;;
+        esac
+done
+
+IP_ADDRESSES=$(/sbin/ifconfig | grep "inet " | sed "s/.*inet \([^ ]*\).*$/\1/")
+#IP_ADDRESSES=$(echo -e "127.0.0.1\n144.32.10.10"$)
+for IP in $IP_ADDRESSES; do
+        IS_WORK_IP=$(echo $IP | grep $WORK_IP_REGEX)
+        if [[ -n $IS_WORK_IP ]]; then
+                EXTRA_RSYNC_OPTIONS=""
+        fi
+done
+
+nice -n 20 rsync $EXTRA_RSYNC_OPTIONS $*

@@ -1,0 +1,4 @@
+rsync --rsh=ssh --archive --delete --verbose --times ijb@linux.cs.york.ac.uk://n/www/usr/ijb/ /Users/ijb/shared/web_pages/current/ 
+/Users/ijb/bin/shared_backup $*
+/Users/ijb/bin/mail_backup $*
+/Users/ijb/bin/my_docs_backup $*

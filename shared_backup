@@ -1,0 +1,2 @@
+cp -a ~/Downloads/JSA-*.pdf ~/Google_Drive/JSA/submitted_papers/ 
+# rsync --rsh=ssh --archive --delete --verbose --times ~/shared/ ijb@headfoo://local/d0p3/ijb/backup/shared/

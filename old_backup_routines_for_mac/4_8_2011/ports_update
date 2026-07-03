@@ -1,0 +1,6 @@
+nice -n 20 port selfupdate
+nice -n 20 port upgrade outdated
+
+# nice -n 20 port clean all installed
+nice -n 20 port -f uninstall inactive
+

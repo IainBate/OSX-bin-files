@@ -1,0 +1,16 @@
+find /Volumes/Home/ -name "._*" -type f -delete
+
+echo "Photos"
+nice -n 20 rsync --progress -r --size-only --verbose --delete "/Volumes/Home/photos/" "/Volumes/GoogleDrive/My Drive/Home/photos/"
+
+echo "Films"
+nice -n 20 rsync --progress -r --size-only --verbose --delete "/Volumes/Home/films/" "/Volumes/GoogleDrive/My Drive/Home/films/"
+
+echo "iTunes"
+nice -n 20 rsync --progress -r --size-only --verbose --delete "/Volumes/Home/iTunes/" "/Volumes/GoogleDrive/My Drive/Home/iTunes/"
+
+echo "files"
+nice -n 20 rsync --progress -r --size-only --verbose --delete --max-size=8G "/Volumes/Home/files/" "/Volumes/GoogleDrive/My Drive/Home/files/"
+
+echo "Olympus TG4"
+nice -n 20 rsync --progress -r --size-only --verbose --delete "/Volumes/Home/olympus_tg4/" "/Volumes/GoogleDrive/My Drive/Home/olympus_tg4/"

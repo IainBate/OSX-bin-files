@@ -1,0 +1,3 @@
+caffeinate -i rsync --progress -r --size-only --verbose --delete --delete-excluded --max-size=4GB --exclude "*DS_Store*" --exclude /.minidlna --exclude *3D.* --exclude "/original 3D films" "/Volumes/films/" /Volumes/CARAVAN/
+
+# rsync --progress --recursive --update --times --verbose --delete --delete-excluded --modify-window=10 --max-size=4GB --exclude "*DS_Store*" --exclude /.minidlna --exclude *3D.* --exclude "/original 3D films" "/Volumes/films/" /Volumes/CARAVAN/

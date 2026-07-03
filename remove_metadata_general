@@ -1,0 +1,2 @@
+filename=`basename "$1" .mp4`
+/opt/local/bin/ffmpeg -i "$1" -sn -map_chapters -1 -map_metadata -1 -map 0:v:0 -map 0:a:0 -metadata title="`echo $filename`" -acodec ac3 -ac 2 -ar 48000 -ab $2 -af "volume=2" -vcodec libx264 -b:v $3 "tmp.mp4"; mv tmp.mp4 "`echo $1|sed "s/mkv/mp4/"`"; rm "$1"

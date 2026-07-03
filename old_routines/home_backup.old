@@ -1,0 +1,15 @@
+find "$1" -maxdepth 1 -mindepth 1 -type d -not -name ".*"| xargs -L 1 basename | while read dir ; do
+	echo "Directory" "$1/$dir/"
+       ~/Dropbox/bin/rclone/rclone sync "$1/$dir/" "Drive:Home/$dir/"
+       ~/Dropbox/bin/rclone/rclone dedupe --dedupe-mode newest "Drive:Home/$dir/"
+done
+
+#~/Dropbox/bin/rclone/rclone sync /Volumes/films/ Drive:Home/films/
+#~/Dropbox/bin/rclone/rclone dedupe --dedupe-mode newest Drive:Home/films/
+
+#~/Dropbox/bin/rclone/rclone sync /Volumes/files/ Drive:Home/files/
+#~/Dropbox/bin/rclone/rclone dedupe --dedupe-mode newest Drive:Home/files/
+
+#~/Dropbox/bin/rclone/rclone sync /Volumes/iTunes/ Drive:Home/iTunes/
+#~/Dropbox/bin/rclone/rclone dedupe --dedupe-mode newest Drive:Home/iTunes/
+

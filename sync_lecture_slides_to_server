@@ -1,0 +1,5 @@
+#!/bin/bash
+
+# CRSY
+rsync --rsh=ssh --archive --delete --verbose --times /--delete-excluded --exclude "*exam*"  ~/CRSY/ ijb500@csresearch1.york.ac.uk://usr/userfs/i/ijb500/w2k/Desktop/
+

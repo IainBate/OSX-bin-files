@@ -1,0 +1,2 @@
+filename=`basename "$1" .mkv`
+/opt/local/bin/ffmpeg -i "$1" -sn -map_chapters -1 -map 0 -map_metadata 0:s:0 -metadata title="`echo $filename`" -c copy "tmp.mp4"; mv tmp.mp4 "`echo $1|sed "s/mkv/mp4/"`"; rm "$1"

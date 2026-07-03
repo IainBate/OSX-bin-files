@@ -1,0 +1,2 @@
+caffeinate -i nice -n 20 rclone --log-file /tmp/dedupe_Archive_logfile dedupe --dedupe-mode newest gdrive:Archive/
+caffeinate -i nice -n 20 rclone --log-file /tmp/dedupe_Home_logfile dedupe --dedupe-mode newest gdrive:Home/

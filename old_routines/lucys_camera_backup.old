@@ -1,0 +1,2 @@
+rsync --archive --delete --delete-excluded --verbose --times --exclude /RECYCLER --exclude /.fseventsd --exclude /.Trashes --exclude "/._.Trashes" --exclude "/System Volume Information" "/Volumes/VTech 773/" /Volume/Other/backups/lucys_camera/internal_memory/
+rsync --archive --delete --delete-excluded --verbose --times --exclude /RECYCLER --exclude /.fseventsd --exclude /.Trashes --exclude "/._.Trashes" --exclude "/System Volume Information" "/Volumes/CANON_DC/" /Volumes/Other/backups/lucys_camera/sd_card/

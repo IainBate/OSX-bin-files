@@ -1,0 +1,23 @@
+#!/bin/bash
+
+rsync --archive --delete --times --verbose /Users/ijb/compiled_videos/ pi@192.168.68.206://mnt/HDD/tmp/compiled_videos_from_MBP/
+
+~/bin/safeguards --bwlimit=1M
+
+# ~/bin/HDD_backup
+
+# rsync --archive --delete --times --verbose --delete-excluded --exclude "s*" --exclude "S*E*" pi@192.168.5.206:"//mnt/HDD/iTunes/iTunes\ Media/Home\" Videos/ ~/TV/Home\ Videos/
+
+# mkdir /Volumes/Archive/Work/DAG\ simulator
+# rsync --archive --delete --times ~/DAG\ simulator/auto_backup_of_routines/ /Volumes/Archive/Work/DAG\ simulator/code/
+# rsync --archive --delete --times ~/DAG\ simulator/results/ /Volumes/Archive/Work/DAG\ simulator/results/
+# rsync --archive --delete --times ~/DAG\ simulator/results_from_compute_servers/ /Volumes/Archive/Work/DAG\ simulator/results_from_compute_servers/
+
+# caffeinate -i nice -n 20 rclone --transfers 8 --checkers 8 --tpslimit 8 --tpslimit-burst 8 --drive-chunk-size 64M --retries 10 --fast-list --verbose sync /Volumes/Archive/Work/ gdrive:Archive/External_HD/Work/
+
+# caffeinate -i nice -n 20 rclone --transfers 8 --checkers 8 --tpslimit 8 --tpslimit-burst 8 --drive-chunk-size 64M --retries 10 --fast-list --verbose sync /Volumes/Archive/Samuel/ gdrive:Archive/External_HD/Samuel/
+
+# caffeinate -i nice -n 20 rclone --transfers 8 --checkers 8 --tpslimit 8 --tpslimit-burst 8 --drive-chunk-size 64M --retries 10 --fast-list --verbose sync ~/compiled_videos/ gdrive:Archive/External_HD/compiled_videos/
+
+# caffeinate -i nice -n 20 rclone --transfers 8 --checkers 8 --tpslimit 8 --tpslimit-burst 8 --drive-chunk-size 64M --retries 10 --fast-list --verbose sync /Volumes/Archive/temporary_files/ gdrive:Archive/External_HD/temporary_files/
+

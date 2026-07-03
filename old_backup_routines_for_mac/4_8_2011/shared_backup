@@ -1,0 +1,2 @@
+/Users/ijb/bin/rsync_modified $* --rsh=ssh --archive --delete --verbose --exclude /lucys_compiled_videos --times /Users/ijb/shared/ ijb@headfoo://local/d0p3/ijb/backup/shared/
+

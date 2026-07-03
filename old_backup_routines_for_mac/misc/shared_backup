@@ -1,0 +1,2 @@
+rsync_modified --rsh=ssh --archive --delete --verbose --exclude /lucys_compiled_videos --times /Users/ijb/shared/ ijb@linux.cs.york.ac.uk://n/staffstore/ijb/backup/shared/
+

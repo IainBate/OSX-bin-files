@@ -1,0 +1,7 @@
+cd /Library/Preferences/SystemConfiguration
+rm com.apple.airport.preferences.plist
+rm com.apple.network.eapolclient.configuration.plist
+rm com.apple.wifi.message-tracer.plist
+rm NetworkInterfaces.plist
+rm preferences.plist
+shutdown -r now

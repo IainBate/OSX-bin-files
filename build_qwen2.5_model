@@ -1,0 +1,14 @@
+# There should be a Modefile
+# FROM qwen2.5-coder:32b-instruct-q4_K_M
+
+# Set system instructions
+# SYSTEM """You are a highly skilled, expert programming AI assistant. Output clean, functional, and well-documented code. Do not apologize or add unnecessary conversational filler."""
+
+# Set temperature
+# PARAMETER temperature 0.2
+# PARAMETER top_p 0.9
+
+# Increase the context window from Ollama's 2048 default
+# PARAMETER num_ctx 32768
+
+ollama create qwen-coder-custom -f ./Modelfile_qwen2.5

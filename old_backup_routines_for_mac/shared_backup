@@ -1,0 +1,3 @@
+if /sbin/mount | grep -q "External HD"; then mv ~/Desktop/JSA-*.pdf ~/shared/JSA/submitted_papers/ ; fi
+if /sbin/mount | grep -q "External HD"; then rsync --rsh=ssh --archive --delete --verbose --times ~/shared/ ijb@headfoo://local/d0p3/ijb/backup/shared/ ; fi
+

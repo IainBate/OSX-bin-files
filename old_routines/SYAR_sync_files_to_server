@@ -1,0 +1,5 @@
+rsync --rsh=ssh --archive --delete --verbose --times /Users/ijb/Google_Drive/lecturing_stuff/SYA/*.ppt* ijb500@csresearch1.york.ac.uk://usr/userfs/i/ijb500/w2k/Desktop/SYAR/
+rsync --rsh=ssh --archive --delete --verbose --times /Users/ijb/Google_Drive/lecturing_stuff/SYA/*.doc* ijb500@csresearch1.york.ac.uk://usr/userfs/i/ijb500/w2k/Desktop/SYAR/
+
+# rsync --rsh=ssh --archive --delete --verbose --times web_pages/ ijb500@sftp://shared/storage/cs/cs-course/syar/
+# rsync --rsh=ssh --archive --delete --verbose --times *.pptx ijb500@sftp.york.ac.uk://usr/userfs/i/ijb500/w2k/Desktop/SYAR/

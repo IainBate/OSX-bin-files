@@ -1,0 +1,15 @@
+# mv /Volumes/Home/photos/raw /Volumes/Home/raw
+# find /Volumes/Home/olympus_tg4/ -mtime +10 -a -mtime -380 -type f -name "*.*" ! -name ".DS_Store" -exec ~/Downloads/copy {} \;
+# find /Volumes/Home/photos/ -mtime +10 -a -mtime -380 -type f -name "*.*" ! -name ".DS_Store" -exec ~/Downloads/copy {} \;
+
+filename=`basename "$1"`
+PID=$$
+prefix=$(echo ${filename%.*})
+extension="${filename##*.}"
+new_filename=$prefix"_"$PID.$extension
+# echo $1 $filename $PID $prefix $extension $new_filename
+cp -av "$1" ~/recent_photos/2017/"$new_filename"
+
+# rm *.doc* *.pdf *.PDF *.AAE
+# mv /Volumes/Home/raw /Volumes/Home/photos/raw 
+

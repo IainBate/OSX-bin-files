@@ -1,0 +1,20 @@
+find . -type f -name '?*.?*' | while read filename
+do
+	echo "Original file name:" $filename
+	filename1=`basename "$filename"`
+        prefix=$(echo ${filename1%.*})
+	echo "Prefix:" ${prefix}
+	DIR=$(dirname "${filename}")
+	echo "Directory:" $DIR
+	new_filename=$DIR/"${prefix}.mp4"
+	echo "New file name:" ${new_filename}
+	base_directory=$(echo "$filename" | cut -d "/" -f2)
+	echo "Base directory:" ${base_directory}
+#	while [ "`ps -ef | grep ffmpeg | grep -v "grep" | wc -l`" -ge $((`sysctl -n hw.ncpu` / 4)) ]
+	while [ "`ps -ef | grep ffmpeg | grep -v "grep" | wc -l`" -ge $((`nproc` / 4)) ]
+	do
+		sleep 60
+	done
+	./convert1 "$filename" "$prefix" "$new_filename" "$base_directory" &
+done
+

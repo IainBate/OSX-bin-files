@@ -1,0 +1,2 @@
+/Users/ijb/bin/rsync_modified $* --rsh=ssh --archive --delete --delete-excluded --verbose --times --exclude Cache --exclude global-messages-db.sqlite /Users/ijb/Mail/ ijb@headfoo://local/d0p3/ijb/backup/Thunderbird_Mail/
+/Users/ijb/bin/rsync_modified $* --rsh=ssh --archive --delete --delete-excluded --verbose --times --exclude Cache --exclude global-messages-db.sqlite /Users/ijb/Library/Mail/ ijb@headfoo://local/d0p3/ijb/backup/Mac_Mail/

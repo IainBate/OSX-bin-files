@@ -1,0 +1,13 @@
+#!/bin/sh
+WORK_IP_REGEX="^144\.32\."
+
+IP_ADDRESSES=$(/sbin/ifconfig | grep "inet " | sed "s/.*inet \([^ ]*\).*$/\1/")
+#IP_ADDRESSES=$(echo -e "127.0.0.1\n144.32.10.10"$)
+for IP in $IP_ADDRESSES; do
+        IS_WORK_IP=$(echo $IP | grep $WORK_IP_REGEX)
+        if [[ -n $IS_WORK_IP ]]; then
+                rsync --rsh=ssh --archive --delete --delete-excluded --verbose --times /Users/ijb/tmp/ ijb@headfoo://local/d0p3/ijb/tmp/tmp_from_mac/
+		rsync --rsh=ssh --archive --delete --delete-excluded --verbose --times /Users/ijb/Movies ijb@headfoo://local/d0p3/ijb/tmp/Movies_from_mac
+		rsync --rsh=ssh --archive --delete --delete-excluded --verbose --times /Users/ijb/Pictures/ ijb@headfoo://local/d0p3/ijb/tmp/Pictures_from_mac/
+        fi
+done

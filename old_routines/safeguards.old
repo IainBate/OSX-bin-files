@@ -1,0 +1,3 @@
+rsync --rsh=ssh --archive --delete --verbose --times /Users/ijb/Documents/  safeguardsfoo:my_documents/
+rsync --rsh=ssh --archive --delete --verbose --times --delete-excluded --exclude Cache --exclude global-messages-db.sqlite /Users/ijb/Mail/  safeguardsfoo:Mail/
+rsync --rsh=ssh --archive --delete --verbose --times /Users/ijb/shared/  safeguardsfoo:shared/

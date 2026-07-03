@@ -1,0 +1,2 @@
+clear; find ~/Google_Drive/ -name "*(1)" -exec rm -rvf {} \;; find ~/Google_Drive/ -name "*(1).*" -exec rm -rvf {} \;;  find ~/Google_Drive/ -name "*(2)" -exec rm -rvf {} \;; find ~/Google_Drive/ -name "*(2).*" -exec rm -rvf {} \;; find ~/Google_Drive/ -name "*(3)" -exec rm -rvf {} \;; find ~/Google_Drive/ -name "*(3).*" -exec rm -rvf {} \;; find ~/Google_Drive/ -name "*(4)" -exec rm -rvf {} \;; find ~/Google_Drive/ -name "*(4).*" -exec rm -rvf {} \;; find ~/Dropbox/ -name "*onflicted*" -exec rm -rvf {} \;; find ~/Dropbox/ -name "*onflicted*.*" -exec rm -rvf {} \;
+

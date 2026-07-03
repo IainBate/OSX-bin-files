@@ -1,0 +1,14 @@
+echo "Photos"
+nice -n 20 rsync --progress -r --size-only --verbose --delete "/Volumes/photos/" "/Volumes/GoogleDrive/My Drive/Home/photos/"
+
+echo "Films"
+nice -n 20 rsync --progress -r --size-only --verbose --delete "/Volumes/films/" "/Volumes/GoogleDrive/My Drive/Home/films/"
+
+echo "iTunes"
+nice -n 20 rsync --progress -r --size-only --verbose --delete "/Volumes/iTunes/" "/Volumes/GoogleDrive/My Drive/Home/iTunes/"
+
+echo "files"
+nice -n 20 rsync --progress -r --size-only --verbose --delete --max-size=8G --delete-excluded --exclude /tmp "/Volumes/files/" "/Volumes/GoogleDrive/My Drive/Home/files/"
+
+echo "Olympus TG4"
+nice -n 20 rsync --progress -r --size-only --verbose --delete "/Volumes/olympus_tg4/" "/Volumes/GoogleDrive/My Drive/Home/olympus_tg4/"

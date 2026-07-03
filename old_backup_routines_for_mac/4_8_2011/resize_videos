@@ -1,0 +1,1 @@
+ffmpeg -i "$1" -s 800x600 -sameq temp.mp4; mv temp.mp4 "$1"

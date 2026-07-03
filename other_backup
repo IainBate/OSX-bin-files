@@ -1,0 +1,4 @@
+mv /Volumes/Home/photos/panasonic_tz20 /Volumes/Home/panasonic_tz20
+rsync --rsh=ssh --archive --delete --delete-excluded --verbose --times --copy-links --copy-dirlinks /Volumes/Other/photos/ /Volumes/Home/photos/
+mv /Volumes/Home/panasonic_tz20 /Volumes/Home/photos/panasonic_tz20
+rsync --rsh=ssh --archive --delete --delete-excluded --verbose --times --copy-links --copy-dirlinks /Volumes/Other/videos/ /Volumes/Home/videos/

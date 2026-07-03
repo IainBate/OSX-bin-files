@@ -1,0 +1,1 @@
+rsync --archive --delete --delete-excluded --verbose --times --exclude /.fseventsd --exclude /.Spotlight-V100 --exclude /.Trashes /Volumes/Other/ "/Volumes/Backup Other/backup/"

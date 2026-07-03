@@ -1,0 +1,5 @@
+rsync --rsh=ssh --archive --delete --delete-excluded --verbose --times --exclude /Android/data/com.google.android.music/files --exclude /Movies --exclude /RECYCLER --exclude /.fseventsd --exclude /.Trashes --exclude "/._.Trashes" --exclude "/System Volume Information" "/Volumes/NO NAME/" /Volumes/Other1/backups/kates_phone/NO\ NAME/
+rsync --rsh=ssh --archive --delete --delete-excluded --verbose --times --exclude /RECYCLER --exclude /.fseventsd --exclude /.Trashes --exclude "/._.Trashes" --exclude "/System Volume Information" "/Volumes/HTC STORAGE/" /Volumes/Other1/backups/kates_phone/HTC\ STORAGE/
+
+
+# rsync --rsh=ssh --archive --delete --delete-excluded --verbose --times --exclude /RECYCLER --exclude /.fseventsd --exclude /.Trashes --exclude "/._.Trashes" --exclude "/System Volume Information" "/Volumes/NO NAME/" /Users/ijb/misc/phone_backup/kate/

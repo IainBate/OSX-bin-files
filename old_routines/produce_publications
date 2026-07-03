@@ -1,0 +1,5 @@
+scp -p ijb@headfoo://n/www/cs/rts/cgi-bin/bibtex/rts.bib  ~/Downloads/
+bibtool '--select {"Bate"}'  ~/Downloads/rts.bib -o ~/Downloads/iain.bib
+cd ~/bin/bib2xhtml-2.30/
+./bib2xhtml -r ~/Downloads/iain.bib ~/Downloads/iain.html
+

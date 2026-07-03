@@ -1,0 +1,4 @@
+cd ~/shared/PROXIMA/Project\ svn/
+svn update
+cd ~/shared/PROXIMA/York\ svn/
+svn update

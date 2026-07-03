@@ -1,0 +1,2 @@
+cd /Volumes/Time\ Machine\ -\ Work/Backups.backupdb/Iain\'s\ Mac/
+sudo timedog -d 8 -l >/tmp/timedog.log

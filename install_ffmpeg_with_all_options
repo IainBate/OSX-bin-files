@@ -1,0 +1,7 @@
+brew uninstall --force --ignore-dependencies ffmpeg
+brew install chromaprint amiaopensource/amiaos/decklinksdk
+brew tap homebrew-ffmpeg/ffmpeg
+brew install ffmpeg
+brew cask install xquartz
+brew upgrade homebrew-ffmpeg/ffmpeg/ffmpeg $(brew options homebrew-ffmpeg/ffmpeg/ffmpeg | grep -vE '\s' | grep -- '--with-' | grep -vi chromaprint | tr '\n' ' ')
+

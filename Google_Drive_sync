@@ -1,0 +1,578 @@
+#!/bin/bash
+# gdrive_sync.sh — Manages a full Google Drive sync cycle: launch → monitor → quit.
+#
+# Sync detection reads Drive's internal plain-text log:
+#   ~/Library/Application Support/Google/DriveFS/Logs/drive_fs.txt
+#
+# Every ~2 minutes Drive appends a "Sync engine activity state:" block. Sync is
+# declared complete only when ALL of the following hold in the most recent such
+# block logged after this script started:
+#
+#   operation_queue_size : 0      no pending operations
+#   all_downloads        : 0      no pending downloads
+#   active_uploads       : 0      no active uploads        (when field present)
+#   change_ids_up_to_date: true   server confirms all changes accounted for
+#   fetching_changes     : false  not actively pulling the server changelog
+#
+# A state block is only used if it contains ALL of operation_queue_size,
+# all_downloads, change_ids_up_to_date, and fetching_changes (active_uploads is
+# the sole optional field). A block missing any of these -- as seen during the
+# brief window while Drive is still loading the account, before its cloud
+# subsystem has finished initialising -- is treated as "not yet usable" rather
+# than misread as "nothing pending". MIN_MONITOR_DURATION adds a second
+# safeguard: a "complete" reading is not trusted within the first two minutes
+# of monitoring, since an almost-instant "complete" result is itself a strong
+# signal of exactly this kind of premature, incomplete block.
+#
+# This script also scans the same log window for two known error patterns that
+# can explain a slow sync without indicating any problem with this script:
+#   1. "... due to non-retriable error: REASON" -- Drive giving up on retrying
+#      a specific change (e.g., an item it can no longer find).
+#   2. "cloud_get_failures { ... status: X ... }" -- a server-side fetch that
+#      failed outright (e.g., PERMISSION_DENIED on an item the account no
+#      longer has access to).
+# Detected errors are surfaced the first time they appear, and again in the
+# periodic stuck-sync and waiting-for-first-state diagnostics. The error count
+# is a snapshot of the current log tail, not a lifetime total -- older
+# instances can scroll out of the window as the log grows.
+#
+# SYNC_TIMEOUT and LOG_TAIL_LINES were both increased (from 1h/300 lines to
+# 2h/500 lines) after a real sync took over 45 minutes to fully reconcile
+# while working through a backlog that included several permission-denied
+# items -- legitimate, if slow, progress that the original limits were too
+# tight to safely accommodate.
+#
+# NOTE: drive_fs.txt is an undocumented internal file. If a future Drive update
+# changes the filename or field names, update DRIVE_LOG and the regex patterns
+# inside check_sync_state() below.
+#
+# NOTE ON COMPLETION STRICTNESS: this script intentionally does NOT treat
+# "change_ids_up_to_date=false" as good enough to quit Drive, even if it has
+# been false for a while and nothing else is pending. A real sync was observed
+# (see project history) holding that field at false for 20+ minutes before
+# correctly completing -- so any time-based bypass of that field risks quitting
+# Drive mid-sync, which is exactly the failure mode this script exists to avoid.
+
+set -uo pipefail
+
+# ── Configuration ─────────────────────────────────────────────────────────────
+readonly DRIVE_APP="Google Drive"
+readonly DRIVE_LOG="${HOME}/Library/Application Support/Google/DriveFS/Logs/drive_fs.txt"
+
+readonly STARTUP_TIMEOUT=60    # Max seconds to wait for Drive process to appear
+readonly LOG_WAIT_TIMEOUT=180  # Max seconds between diagnostic dumps while waiting for the first log entry
+readonly SYNC_TIMEOUT=7200     # Max seconds before giving up on sync (2 hours)
+readonly POLL_INTERVAL=30      # Seconds between sync-state checks
+readonly MIN_MONITOR_DURATION=120  # Minimum seconds before trusting a "complete" reading
+                                    # (guards against an early, field-incomplete state block
+                                    # logged while Drive is still loading the account)
+readonly LOG_TAIL_LINES=500    # Lines to inspect per check (~50 min of state blocks at 2-min intervals)
+readonly QUIT_GRACE=10         # Seconds to pause after sync complete before quitting
+                               # (guards against a new change arriving just as queues empty)
+readonly QUIT_TIMEOUT=30       # Max seconds to wait for Drive to quit cleanly before warning
+readonly STUCK_THRESHOLD=600   # Seconds of unchanged sync state before warning (10 min)
+
+# All output goes to stdout AND this file; delete the file to disable logging.
+readonly SCRIPT_LOG="${HOME}/Library/Logs/gdrive_sync.log"
+
+# Lock file — prevents two instances running concurrently.
+readonly LOCK_FILE="${TMPDIR:-/tmp}/gdrive_sync.lock"
+
+# UTC launch time — used to ignore state blocks predating this script run.
+SCRIPT_START=$(date -u '+%Y-%m-%dT%H:%M:%S')
+readonly SCRIPT_START
+
+# ── Helpers ───────────────────────────────────────────────────────────────────
+log() {
+    local msg="[$(date '+%H:%M:%S')] $*"
+    echo "$msg"
+    printf '%s\n' "$msg" >> "$SCRIPT_LOG" 2>/dev/null || true
+}
+
+die() {
+    log "ERROR: $*" >&2
+    exit 1
+}
+
+cleanup() {
+    rm -rf "$LOCK_FILE" 2>/dev/null || true
+}
+
+is_drive_running() {
+    pgrep -qf "/Applications/Google Drive.app"
+}
+
+# Reads the tail of drive_fs.txt and returns TWO lines on stdout, always:
+#   Line 1: pending-condition summary (empty if sync is complete), e.g.
+#           "change_ids_up_to_date=false (Drive reconciling with server) | change_id=132244274"
+#   Line 2: "ERRORS: <summary>" — a snapshot of known error patterns found in
+#           the same log window, or "ERRORS: none"
+#
+# Exit 0 → sync complete    (all conditions met)
+# Exit 1 → sync in progress (at least one condition not met; line 1 has details)
+# Exit 2 → no usable state  (log missing, no post-launch block found, or parse error)
+check_sync_state() {
+    if [[ ! -f "$DRIVE_LOG" ]]; then
+        printf '\nERRORS: none'
+        return 2
+    fi
+
+    local result exit_code
+    # stderr is suppressed — the Python try/except catches all errors and maps
+    # them to exit code 2, so crashes never produce ambiguous output on stdout.
+    result=$(python3 - "$DRIVE_LOG" "$LOG_TAIL_LINES" "$SCRIPT_START" 2>/dev/null << 'PYEOF'
+import sys, re
+from collections import Counter
+from datetime import datetime, timezone
+
+
+def scan_errors(tail):
+    """Scans the given lines for known error patterns and returns a short,
+    human-readable summary string (or 'none' if nothing found).
+
+    Covers two distinct patterns seen in Drive's log:
+      1. "... due to non-retriable error: REASON" -- a single-line pattern
+         from file_provider_change_replayer.cc, logged when Drive gives up
+         retrying a specific change (e.g., an item it can no longer access).
+      2. "cloud_get_failures { key: \"...\" value { status: X reason: \"Y\" } }"
+         -- a multi-line block logged when a server-side fetch fails outright
+         (e.g., PERMISSION_DENIED). Not covered by pattern 1.
+    """
+    non_retriable_count = 0
+    non_retriable_reasons = set()
+
+    for line in tail:
+        m = re.search(r'non-retriable error:\s*([^:]+)', line)
+        if m:
+            non_retriable_count += 1
+            non_retriable_reasons.add(m.group(1).strip())
+
+    permission_statuses = []
+    i = 0
+    while i < len(tail):
+        if 'cloud_get_failures' in tail[i]:
+            status = None
+            j = i + 1
+            while j < len(tail) and j < i + 8:
+                sm = re.search(r'status:\s*(\w+)', tail[j])
+                if sm:
+                    status = sm.group(1)
+                if '}' in tail[j] and status is not None:
+                    break
+                j += 1
+            if status:
+                permission_statuses.append(status)
+            i = max(j, i + 1)
+            continue
+        i += 1
+
+    parts = []
+    if non_retriable_count:
+        reasons = ', '.join(sorted(non_retriable_reasons)) if non_retriable_reasons else 'unspecified'
+        parts.append(f'{non_retriable_count} non-retriable change-replay error(s) [{reasons}]')
+
+    if permission_statuses:
+        counts = Counter(permission_statuses)
+        breakdown = ', '.join(f'{n}x {status}' for status, n in counts.most_common())
+        parts.append(f'{len(permission_statuses)} cloud fetch failure(s) [{breakdown}]')
+
+    return '; '.join(parts) if parts else 'none'
+
+
+def parse_last_block(tail, script_start):
+    """Returns a dict describing the most recent fully-populated, post-launch
+    'Sync engine activity state:' block, or None if no such block exists.
+
+    A block must include operation_queue_size, all_downloads,
+    change_ids_up_to_date, and fetching_changes to be considered usable.
+    active_uploads and largest_local_change_id are optional.
+    """
+    TIMESTAMP_RE = re.compile(r'^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})')
+
+    in_block = False
+    block_time = None
+    op_queue = downloads = uploads = change_id = None
+    changes_up_to_date = fetching = None
+
+    final = None
+
+    def commit():
+        nonlocal final
+        if (op_queue is not None and downloads is not None
+                and changes_up_to_date is not None and fetching is not None
+                and block_time is not None):
+            final = {
+                'time': block_time,
+                'op_queue': op_queue,
+                'downloads': downloads,
+                'uploads': uploads,
+                'changes_up_to_date': changes_up_to_date,
+                'fetching': fetching,
+                'change_id': change_id,
+            }
+
+    for line in tail:
+        # A state block header always appears on a timestamped line. This
+        # branch must precede the in_block timestamp-termination check below
+        # so consecutive state blocks are handled correctly.
+        if 'Sync engine activity state:' in line:
+            commit()
+            in_block = True
+            op_queue = downloads = uploads = change_id = None
+            changes_up_to_date = fetching = None
+            m = TIMESTAMP_RE.match(line)
+            block_time = (datetime.fromisoformat(m.group(1)).replace(tzinfo=timezone.utc)
+                          if m else None)
+            continue
+
+        if in_block:
+            if re.match(r'^\d{4}-\d{2}-\d{2}', line):
+                commit()
+                in_block = False
+                continue
+
+            m = re.search(r'operation_queue_size:\s*(\d+)', line)
+            if m: op_queue = int(m.group(1))
+
+            m = re.search(r'all_downloads:\s*(\d+)', line)
+            if m: downloads = int(m.group(1))
+
+            m = re.search(r'active_uploads:\s*(\d+)', line)
+            if m: uploads = int(m.group(1))
+
+            m = re.search(r'change_ids_up_to_date:\s*(true|false)', line)
+            if m: changes_up_to_date = (m.group(1) == 'true')
+
+            m = re.search(r'fetching_changes:\s*(true|false)', line)
+            if m: fetching = (m.group(1) == 'true')
+
+            m = re.search(r'largest_local_change_id:\s*(\d+)', line)
+            if m: change_id = m.group(1)
+
+    commit()  # Commit a trailing block that runs to EOF without a closing timestamp
+
+    if final is None:
+        return None
+
+    # Discard blocks written before this script launched
+    if script_start is not None and final['time'] < script_start:
+        return None
+
+    return final
+
+
+def main():
+    log_file   = sys.argv[1]
+    tail_lines = int(sys.argv[2])
+    start_str  = sys.argv[3]
+
+    try:
+        script_start = datetime.fromisoformat(start_str).replace(tzinfo=timezone.utc)
+    except ValueError:
+        script_start = None  # Unparseable; skip the pre-launch filter
+
+    try:
+        with open(log_file, errors='replace') as f:
+            lines = f.readlines()
+    except OSError:
+        print('')
+        print('ERRORS: none')
+        return 2
+
+    tail = lines[-tail_lines:]
+    error_summary = scan_errors(tail)
+    block = parse_last_block(tail, script_start)
+
+    if block is None:
+        print('')
+        print(f'ERRORS: {error_summary}')
+        return 2
+
+    pending = []
+    if block['op_queue'] != 0:
+        pending.append(f"operation_queue_size={block['op_queue']}")
+    if block['downloads'] != 0:
+        pending.append(f"all_downloads={block['downloads']}")
+    if block['uploads'] is not None and block['uploads'] != 0:
+        pending.append(f"active_uploads={block['uploads']}")
+    # change_ids_up_to_date must be explicitly True; False means Drive is still
+    # reconciling with the server even though local queues appear empty.
+    if block['changes_up_to_date'] is False:
+        pending.append('change_ids_up_to_date=false (Drive reconciling with server)')
+    if block['fetching'] is True:
+        pending.append('fetching_changes=true')
+
+    if pending:
+        info_line = ', '.join(pending)
+        # change_id is purely an optional enrichment -- its absence must never
+        # erase the pending-condition summary above.
+        if block['change_id'] is not None:
+            info_line += f" | change_id={block['change_id']}"
+    else:
+        info_line = ''
+
+    print(info_line)
+    print(f'ERRORS: {error_summary}')
+    return 1 if pending else 0
+
+
+try:
+    sys.exit(main())
+except Exception as exc:
+    # Any unhandled exception exits 2 (no usable state) rather than producing
+    # an ambiguous result that could be mistaken for exit 1 (syncing).
+    print('')
+    print(f'ERRORS: parser error: {exc}')
+    sys.exit(2)
+PYEOF
+    )
+    exit_code=$?
+
+    # Python should always exit 0/1/2; anything higher means python3 itself failed
+    if (( exit_code > 2 )); then
+        log "WARNING: Log parser returned unexpected exit code ${exit_code}." \
+            "Check that python3 is installed and working." >&2
+        printf '\nERRORS: none'
+        return 2
+    fi
+
+    printf '%s' "$result"
+    return "$exit_code"
+}
+
+# ── Traps ─────────────────────────────────────────────────────────────────────
+trap 'cleanup' EXIT
+trap 'echo; log "Script interrupted. ${DRIVE_APP} is still running."; exit 1' INT TERM
+
+# ── 1. Environment checks ──────────────────────────────────────────────────────
+[[ "$(uname)" == "Darwin" ]] || die "This script requires macOS."
+
+command -v python3 &>/dev/null || \
+    die "python3 is required but not found. Install via: xcode-select --install"
+
+if [[ ! -d "/Applications/Google Drive.app" ]] && \
+   [[ ! -d "${HOME}/Applications/Google Drive.app" ]]; then
+    die "Google Drive is not installed (checked /Applications and ~/Applications)."
+fi
+
+# ── 2. Single-instance lock ────────────────────────────────────────────────────
+if ! mkdir "$LOCK_FILE" 2>/dev/null; then
+    existing_pid=$(cat "$LOCK_FILE/pid" 2>/dev/null || echo "unknown")
+    die "Another instance is already running (PID: ${existing_pid})." \
+        "Remove ${LOCK_FILE} manually if it is stale."
+fi
+echo "$$" > "$LOCK_FILE/pid"
+
+log "=== gdrive_sync started (PID $$) ==="
+
+# ── 3. Launch Google Drive ────────────────────────────────────────────────────
+if is_drive_running; then
+    log "Google Drive is already running — proceeding to sync monitoring."
+else
+    log "Launching ${DRIVE_APP}..."
+    open -a "${DRIVE_APP}" || die "Failed to launch ${DRIVE_APP}. Check it is installed correctly."
+fi
+
+# ── 4. Wait for the Drive process to appear ───────────────────────────────────
+log "Waiting for ${DRIVE_APP} process (up to ${STARTUP_TIMEOUT}s)..."
+startup_elapsed=0
+until is_drive_running; do
+    if (( startup_elapsed >= STARTUP_TIMEOUT )); then
+        die "Drive process did not appear within ${STARTUP_TIMEOUT}s." \
+            "It may have failed to launch or crashed immediately."
+    fi
+    sleep 5
+    startup_elapsed=$(( startup_elapsed + 5 ))
+done
+log "Drive process is running."
+
+# ── 5. Monitor sync state ──────────────────────────────────────────────────────
+# Drive appends a "Sync engine activity state:" block ~every 2 minutes.
+# We wait for the first such block written after this script started before
+# acting on any result, so pre-launch stale data is never mistaken for current state.
+log "Monitoring sync (state logged ~every 2 min; timeout: ${SYNC_TIMEOUT}s)..."
+log "Script log: ${SCRIPT_LOG}"
+
+sync_elapsed=0
+log_wait_start=$(date +%s)
+first_state_seen=0         # set to 1 once we see any post-launch state block
+sync_in_progress_since=0   # timestamp when state 1 was first seen (for stuck detection)
+last_stuck_warn=0          # timestamp of last stuck warning (rate-limit repeated warnings)
+errors_ever_seen=0         # set to 1 after the first non-"none" error summary
+last_change_id=""          # most recently observed largest_local_change_id
+change_id_stable_since=0   # timestamp since last_change_id last changed
+max_checks=$(( SYNC_TIMEOUT / POLL_INTERVAL ))
+
+while true; do
+    raw_state=$(check_sync_state)
+    state=$?
+
+    base_msg=$(printf '%s\n' "$raw_state" | sed -n '1p')
+    error_msg=$(printf '%s\n' "$raw_state" | grep '^ERRORS:' | sed 's/^ERRORS: //')
+    [[ -z "$error_msg" ]] && error_msg="none"
+
+    current_check=$(( (sync_elapsed / POLL_INTERVAL) + 1 ))
+    remaining=$(( max_checks - current_check ))
+    (( remaining < 0 )) && remaining=0
+
+    # One-time notice the first time any error pattern is detected, regardless
+    # of state. These errors are very likely the reason a sync is slow rather
+    # than a script malfunction, so surfacing them early helps distinguish the two.
+    if [[ "$error_msg" != "none" ]] && (( errors_ever_seen == 0 )); then
+        log "NOTE: Sync-related errors detected in Drive's log: ${error_msg}"
+        log "      This can explain a slow sync (Drive may be repeatedly retrying"
+        log "      inaccessible items). Search ${DRIVE_LOG} for these patterns,"
+        log "      or check Drive's web UI for items you may have lost access to."
+        errors_ever_seen=1
+    fi
+
+    case $state in
+
+        0)  # ── All conditions met — sync complete ────────────────────────────
+            first_state_seen=1
+            sync_in_progress_since=0
+
+            if (( sync_elapsed < MIN_MONITOR_DURATION )); then
+                log "Sync state reads complete after only ${sync_elapsed}s" \
+                    "(minimum ${MIN_MONITOR_DURATION}s before trusting this). Confirming with another check..."
+            else
+                log "Sync complete — all queues empty and server reconciliation confirmed."
+                break
+            fi
+            ;;
+
+        1)  # ── Sync in progress ────────────────────────────────────────────
+            first_state_seen=1
+            now=$(date +%s)
+
+            if (( sync_in_progress_since == 0 )); then
+                sync_in_progress_since=$now
+            fi
+            in_progress_secs=$(( now - sync_in_progress_since ))
+
+            # Track largest_local_change_id to distinguish "still advancing"
+            # from "wedged on the same point" — a stronger stuck signal than
+            # elapsed time alone.
+            if [[ "$base_msg" =~ change_id=([0-9]+) ]]; then
+                current_change_id="${BASH_REMATCH[1]}"
+                if [[ "$current_change_id" != "$last_change_id" ]]; then
+                    last_change_id="$current_change_id"
+                    change_id_stable_since=$now
+                fi
+            fi
+
+            if (( in_progress_secs >= STUCK_THRESHOLD )) && \
+               (( now - last_stuck_warn >= STUCK_THRESHOLD )); then
+                in_progress_min=$(( in_progress_secs / 60 ))
+                log "WARNING: Sync has been in progress for ${in_progress_min} min with no completion."
+
+                if [[ -n "$last_change_id" ]]; then
+                    stable_min=$(( (now - change_id_stable_since) / 60 ))
+                    if (( stable_min >= 5 )); then
+                        log "         largest_local_change_id has been static at ${last_change_id} for ~${stable_min} min."
+                        log "         This suggests Drive may be wedged, not just slow."
+                    else
+                        log "         largest_local_change_id is advancing (now ${last_change_id})."
+                        log "         Drive appears to be actively working through a backlog."
+                    fi
+                fi
+
+                if [[ "$error_msg" != "none" ]]; then
+                    log "         Errors: ${error_msg}"
+                    log "         Search ${DRIVE_LOG} for these patterns to identify affected items."
+                else
+                    log "         No errors detected; Drive may simply have a large backlog to process."
+                fi
+                log "         Current state: ${base_msg:-<no pending details>}"
+                last_stuck_warn=$now
+            else
+                log "Syncing: ${base_msg}. (${remaining} checks left until timeout)"
+            fi
+            ;;
+
+        2)  # ── No usable post-launch state block yet ───────────────────────
+            sync_in_progress_since=0  # Reset stuck timer if we lose visibility
+
+            if ! is_drive_running; then
+                die "Google Drive stopped unexpectedly during sync monitoring."
+            fi
+
+            if [[ ! -f "$DRIVE_LOG" ]]; then
+                log "WARNING: Log file not found at: ${DRIVE_LOG}"
+                log "         Drive may store logs elsewhere. Run:"
+                log "         ls ~/Library/Application\\ Support/Google/DriveFS/Logs/"
+            fi
+
+            if (( first_state_seen == 0 )); then
+                log_wait_secs=$(( $(date +%s) - log_wait_start ))
+
+                if (( log_wait_secs >= LOG_WAIT_TIMEOUT )); then
+                    log "WARNING: No sync state block found after ${log_wait_secs}s." >&2
+                    if [[ "$error_msg" != "none" ]]; then
+                        log "         Errors: ${error_msg}" >&2
+                    fi
+                    log "         Diagnostic — last 10 lines of Drive log:" >&2
+                    if [[ -f "$DRIVE_LOG" ]]; then
+                        tail -10 "$DRIVE_LOG" >&2
+                    else
+                        log "         (log file not found at: ${DRIVE_LOG})" >&2
+                    fi
+                    log "         Continuing to wait — Drive may still be initialising." >&2
+                    log_wait_start=$(date +%s)
+                else
+                    log "Waiting for Drive to log its first sync state (~2 min after startup)..."
+                fi
+            else
+                log "No recent state block yet; waiting for Drive's next log entry..."
+            fi
+            ;;
+
+    esac
+
+    if (( sync_elapsed >= SYNC_TIMEOUT )); then
+        {
+            log "Timed out after ${SYNC_TIMEOUT}s. Diagnostic — last 15 lines of Drive log:"
+            if [[ "$error_msg" != "none" ]]; then
+                log "Errors detected during monitoring: ${error_msg}"
+            fi
+            if [[ -f "$DRIVE_LOG" ]]; then
+                tail -15 "$DRIVE_LOG"
+            else
+                echo "  (log file not found at: ${DRIVE_LOG})"
+            fi
+        } >&2
+        die "Sync timed out after ${SYNC_TIMEOUT}s. Google Drive will not be quit."
+    fi
+
+    sleep "$POLL_INTERVAL"
+    sync_elapsed=$(( sync_elapsed + POLL_INTERVAL ))
+done
+
+# ── 6. Grace period ────────────────────────────────────────────────────────────
+log "Pausing ${QUIT_GRACE}s before quitting (guarding against late-arriving changes)..."
+sleep "$QUIT_GRACE"
+
+# ── 7. Quit Google Drive ──────────────────────────────────────────────────────
+log "Quitting ${DRIVE_APP}..."
+if ! osascript -e "quit app \"${DRIVE_APP}\"" 2>/dev/null; then
+    log "WARNING: AppleScript quit command failed. Drive may have already exited."
+fi
+
+quit_elapsed=0
+while is_drive_running && (( quit_elapsed < QUIT_TIMEOUT )); do
+    sleep 2
+    quit_elapsed=$(( quit_elapsed + 2 ))
+done
+
+if is_drive_running; then
+    log "WARNING: ${DRIVE_APP} is still running after ${QUIT_TIMEOUT}s."
+    log "         It may be processing a final write. Check Activity Monitor if it persists."
+    EXIT_REASON="Sync completed, but ${DRIVE_APP} did not quit within ${QUIT_TIMEOUT}s."
+else
+    log "${DRIVE_APP} has exited cleanly."
+    EXIT_REASON="Sync completed and ${DRIVE_APP} quit cleanly."
+fi
+
+log "----------------------------------------------------------"
+log "FINISHED: ${EXIT_REASON}"
+log "============================================================"

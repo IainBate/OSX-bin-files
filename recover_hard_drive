@@ -1,0 +1,15 @@
+echo "Photos"
+# nice -n 20 rsync --verbose --progress --archive --times "/Volumes/GoogleDrive/My Drive/Home/photos/" "/Volumes/Home/photos/"
+
+echo "Films"
+nice -n 20 rsync --verbose --progress --archive --times "/Volumes/GoogleDrive/My Drive/Home/films/" "/Volumes/Home/films/"
+
+echo "iTunes"
+nice -n 20 rsync --verbose --progress --archive --times "/Volumes/GoogleDrive/My Drive/Home/iTunes/" "/Volumes/Home/iTunes/"
+
+echo "files"
+nice -n 20 rsync --verbose --progress --archive --times "/Volumes/GoogleDrive/My Drive/Home/files/" "/Volumes/Home/files/"
+# nice -n 20 rsync --verbose --progress --archive --times --max-size=8G "/Volumes/GoogleDrive/My Drive/Home/files/" "/Volumes/Home/files/"
+
+echo "Olympus TG4"
+nice -n 20 rsync --verbose --progress --archive --times "/Volumes/GoogleDrive/My Drive/Home/olympus_tg4/" "/Volumes/Home/olympus_tg4/"

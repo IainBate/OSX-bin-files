@@ -1,0 +1,37 @@
+rsync --archive --delete --times --verbose --no-links --delete-excluded --exclude="*.gdoc" --include="/*/.*" --exclude="/.*" --exclude ".fcpcache" --exclude "/.Trash" --exclude "/Library" --exclude "/My Drive" --exclude "/Google Drive" --exclude "/My Drive (iain.bate@york.ac.uk)" ~/ ~/My\ Drive/misc/Mac\ backup/
+cp -p ~/.zshrc ~/My\ Drive/misc/Mac\ backup/
+cp -p ~/.claude ~/My\ Drive/misc/Mac\ backup/claude_backup
+
+cp -av ~/Dropbox/Apps/Overleaf/Master\ files/references.bib ~/My\ Drive/misc/Mac\ backup/refer.bib
+
+crontab -l >~/My\ Drive/misc/Mac\ backup/my_crontab
+
+rm -rf ~/My\ Drive/misc/Mac\ backup/Brewfile
+brew bundle dump --file=~/My\ Drive/misc/Mac\ backup/Brewfile
+
+# Update the OSX-bin-files git repo
+cd ~/bin 2>/dev/null || cd /Users/ijb/bin 2>/dev/null
+git add -A 2>/dev/null
+git diff --cached --quiet 2>/dev/null || git commit -m "auto: $(date +%F)" 2>/dev/null
+# git push 2>/dev/null  # uncomment when you want auto-push
+
+# DATE=$(date "+%d_%m_%Y")
+# mkdir ~/WCET\ Confidence/auto_backup_of_routines/$DATE
+# find ~/WCET\ Confidence/ -maxdepth 1 -type f ! -name '.DS_Store' -exec gcp -avu {} ~/WCET\ Confidence/auto_backup_of_routines/$DATE/ \;
+
+# mkdir ~/DAG\ simulator
+# mkdir ~/DAG\ simulator/auto_backup_of_routines
+# mkdir ~/DAG\ simulator/auto_backup_of_routines/$DATE
+# find ~/DAG\ simulator/ -maxdepth 1 -type f ! -name '.DS_Store' -exec gcp -avu {} ~/DAG\ simulator/auto_backup_of_routines/$DATE/ \;
+# find ~/DAG\ simulator/auto_backup_of_routines -name "Ico*" -exec rm -rvf {} \;
+
+# pushd ~/DAG\ simulator/auto_backup_of_routines
+# rmlint
+# ./rmlint.sh -d
+# find . -type d -empty -delete
+# if [ -f "./rmlint.json" ] ; then
+#     rm "./rmlint.json"
+# fi
+# popd
+
+# caffeinate -i nice -n 20 rclone $1 --transfers 8 --checkers 8 --tpslimit 8 --tpslimit-burst 8 --drive-chunk-size 64M --retries 10 --fast-list --verbose sync /Users/ijb/ gdrive:Archive/Mac_Book_Pro/ --exclude "/.vscode/**" --exclude "/Pictures/**" --exclude "/Ico*" --exclude "/Google Drive File Stream/**" --exclude "/.venv_pypy3/**" --exclude "/.p2/**" --exclude "/Dropbox/**" --exclude "/.virtualenvs/**" --exclude "/.eclipse/**" --exclude "/.bash_sessions/**" --exclude "/Library/**" --exclude "/.Trash/**" --exclude "/.dropbo*" --exclude "/Downloads/**" --exclude "/GNAT/**" --exclude "/Movies/**" --exclude "/.pyenv/**" --exclude "/eclipse/**"

@@ -1,0 +1,6 @@
+>~/Desktop/home_backup.log
+find /Volumes/Home -maxdepth 1 -mindepth 1 -type d -not -name ".*"| xargs -L 1 basename | while read dir ; do
+	echo "Directory" "/Volumes/Home/$dir/" "$dir" >>~/Desktop/home_backup.log
+	echo "nice -n 20 rsync --rsh=ssh --progress --archive --delete --delete-excluded --verbose --times "/Volumes/Home/$dir/" "/Volumes/GoogleDrive/My Drive/Home/$dir/"" >>~/Desktop/home_backup.log
+	nice -n 20 rsync --rsh=ssh --progress --archive --delete --delete-excluded --verbose --times "/Volumes/Home/$dir/" "/Volumes/GoogleDrive/My Drive/Home/$dir/" >>~/Desktop/home_backup.log
+done

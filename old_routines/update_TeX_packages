@@ -1,0 +1,3 @@
+tlmgr update --self
+tlmgr update all
+mktexlsr

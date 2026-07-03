@@ -1,0 +1,7 @@
+rsync --rsh=ssh --progress --archive --delete --delete-excluded --verbose --times --exclude "*.MOV" --exclude "*.mp4" /Volumes/olympus_tg4/ ~/recent_photos/olympus_tg4/
+rsync --rsh=ssh --progress --archive --delete --delete-excluded --verbose --times --exclude "*.MOV" --exclude "*.mp4" /Volumes/photos/panasonic_tz20/ ~/recent_photos/panasonic_tz20/
+rsync --rsh=ssh --progress --archive --delete --delete-excluded --verbose --times --exclude "*.MOV" --exclude "*.mp4" /Volumes/Untitled/DCIM/ ~/recent_photos/sd_card/
+
+# rsync --rsh=ssh --progress --archive --delete --delete-excluded --verbose --times --exclude "*.MOV" --exclude "*.mp4" /Volumes/photos/iains_iPhone/ ~/recent_photos/iains_iPhone/
+# rsync --rsh=ssh --progress --archive --delete --delete-excluded --verbose --times --exclude "*.MOV" --exclude "*.mp4" /Volumes/photos/kates_iPhone/ ~/recent_photos/kates_iPhone/
+

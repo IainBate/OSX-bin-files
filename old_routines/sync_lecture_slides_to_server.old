@@ -1,0 +1,22 @@
+#!/bin/bash
+
+mkdir /tmp/lecture_slides
+mkdir /tmp/lecture_slides/CRSY\ lecture\ notes
+mkdir /tmp/lecture_slides/CRSY\ lecture\ notes/BBC_videos
+mkdir /tmp/lecture_slides/CRSY\ lecture\ notes/seminars
+# mkdir /tmp/lecture_slides/DART
+
+# CRSY
+rsync --rsh=ssh --archive --delete --verbose --times /Volumes/GoogleDrive/My\ Drive/lecturing_stuff/archive_material/CRS/BBC_videos/*.mp4 /tmp/lecture_slides/CRSY\ lecture\ notes/BBC_videos/
+rsync --rsh=ssh --archive --delete --verbose --times /Volumes/GoogleDrive/My\ Drive/lecturing_stuff/CRS/L*.pptx /tmp/lecture_slides/CRSY\ lecture\ notes/
+rsync --rsh=ssh --archive --delete --verbose --times /Volumes/GoogleDrive/My\ Drive/lecturing_stuff/CRS/P*.docx /tmp/lecture_slides/CRSY\ lecture\ notes/
+# rsync --rsh=ssh --archive --delete --verbose --times /Volumes/GoogleDrive/My\ Drive/lecturing_stuff/CRS/seminars/ /tmp/lecture_slides/CRSY/seminars/
+rsync --rsh=ssh --archive --delete --verbose --times /Volumes/GoogleDrive/My\ Drive/lecturing_stuff/CRS/CRSY\ -\ 2019\ 0\ -\ CS\ Exams/\[003\]\ Presentation/Submissions\ between\ 2019\ 12\ 04\ 12:00\ and\ 2020\ 01\ 27\ 13:37/  /tmp/lecture_slides/CRSY\ seminars/
+
+# DART
+# cp -av /Volumes/GoogleDrive/My\ Drive/lecturing_stuff/ARTS/*.pp* /tmp/lecture_slides/DART/
+
+# rsync --rsh=ssh --archive --delete --verbose --times --delete-excluded --exclude "/other stuff" --exclude "Ico*" --exclude "NOTE*" /Volumes/GoogleDrive/My\ Drive/lecturing_stuff/ARTS/Practicals/ /tmp/lecture_slides/DART/Practicals/
+
+rsync --rsh=ssh --archive --delete --verbose --times /tmp/lecture_slides/ ijb500@csresearch1.york.ac.uk://usr/userfs/i/ijb500/w2k/Desktop/
+

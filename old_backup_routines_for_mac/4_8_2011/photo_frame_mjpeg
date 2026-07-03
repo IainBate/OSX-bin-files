@@ -1,0 +1,2 @@
+ffmpeg -i $1 -vcodec mjpeg -acodec pcm_mulaw -ar 16000 -ab 128k -b 750k -s vga $2
+

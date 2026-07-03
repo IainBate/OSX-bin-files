@@ -1,0 +1,3 @@
+# ffmpeg -i "$1" -s 1280x720 -sameq temp.mp4; mv temp.mp4 "$1"
+if ffmpeg -i "$i" 2>&1 | grep -v "1280x720"|grep -q "Video"; then echo"$i$"; ffmpeg -i "$1" -s 1280x720 -sameq temp.mp4; mv temp.mp4 "$1"; fi
+

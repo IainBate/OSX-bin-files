@@ -1,0 +1,11 @@
+if echo "$1" |grep -q "originals" ; then
+	echo "Excluded File"
+else
+	file1=$(basename "$1")
+	file2="${file1%.*}"
+	file=${file2}_$$.JPG
+	echo $file1 $file2 $file
+	cd ~/Downloads/photo_frame/
+	cp -av "$1" "$file"
+	mogrify -resize 640x480 -strip "$file"
+fi

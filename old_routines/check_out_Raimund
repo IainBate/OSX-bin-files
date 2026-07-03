@@ -1,0 +1,2 @@
+svn co --username uk_origin https://susix.stca.herts.ac.uk/svn/mess ~/Dropbox/misc/Multistar\ proposal/
+# svn co svn+ssh://svn@revisionix.stca.herts.ac.uk/repositories/appl_EPSRC_2011_robustness/ ~/Dropbox/misc/Raimund/svn/

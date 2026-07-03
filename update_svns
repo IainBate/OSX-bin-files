@@ -1,0 +1,65 @@
+# svn co http://proxima-svn.bsc.es/repos/proxima ~/svns/PROXIMA\ Project\ svn/
+echo "PROXIMA svn"
+cd /Volumes/Archive/Work/svns/PROXIMA\ Project\ svn/
+svn update
+
+# svn co https://cssvn.york.ac.uk/repos/PROXIMA/ ~/svns/PROXIMA\ York\ svn/
+echo "FBI svn"
+cd /Volumes/Archive/Work/svns/FBI/
+svn update
+
+# svn co https://cssvn.york.ac.uk/repos/mbpta_reliability_paper ~/svns/mbpta_reliability_paper/
+echo "MBPTA Reliability Paper svn"
+cd /Volumes/Archive/Work/svns/mbpta_reliability_paper/
+svn update
+
+# svn co https://cssvn.york.ac.uk/repos/wsn_lab ~/svns/WSN\ Lab/
+echo "WSN Lab svn"
+cd /Volumes/Archive/Work/svns/WSN\ Lab/
+svn update
+
+# svn co https://cssvn.york.ac.uk/repos/RGs_with_time/ cd ~/Google\ Drive\ File\ Stream/My\ Drive/misc/MCCps/svn/
+echo "RGs with Cliff svn"
+# cd ~/Google\ Drive\ File\ Stream/My\ Drive/misc/MCCps/svn/
+cd ~/RGs\ svn/
+svn update
+cd /Volumes/Archive/Work/svns/RGs\ svn/
+svn update
+
+# svn co https://cssvn.york.ac.uk/repos/RoboTime/ cd ~/Google\ Drive\ File\ Stream/My\ Drive/proposals/RoboTime/svn/
+echo "RoboTime svn"
+cd ~/Google\ Drive\ File\ Stream/My\ Drive/proposals/RoboTime/svn/
+svn update
+cd /Volumes/Archive/Work/svns/RoboTime/
+svn update
+
+# git pull https://git.cs.york.ac.uk/taco/tacodat/ /Volumes/Archive/Work/svns/taco/
+echo "tacodat git"
+cd /Volumes/Archive/Work/svns/taco/
+git pull
+
+# git clone https://github.com/AsimPoptani/mhealth-playground ~/mhealth-playground
+echo "mHealth"
+cd ~/mhealth-playground
+git pull
+cd /Volumes/Archive/Work/svns/mhealth-playground/
+git pull
+
+cd /Volumes/Archive/Work/svns/HeuristicEZ/
+git pull
+
+cd /Volumes/Archive/Work/svns/Crowd\ Source\ Privacy/
+git pull
+
+cd /Volumes/Archive/Work/svns/OpenSPACE/
+git pull
+
+cd /Volumes/Archive/Work/svns/mdh_publications/
+svn update
+
+# git clone https://github.com/ZXspectrumZ80/Research_Activities from Bashar
+echo "Bashar"
+cd ~/Bashar
+git pull
+cd /Volumes/Archive/Work/svns/Bashar
+git pull

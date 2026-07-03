@@ -1,0 +1,5 @@
+count=0; base=1; find /Volumes/Archive/compiled_videos/Lucy\ and\ Emily/ -maxdepth 2 -mindepth 2 -type d | while read n ; do n+=\/; echo "$n"; target_dir=$(echo $n | sed 's/\/Volumes\/Archive\/compiled_videos\/Lucy\ and\ Emily\//\/Volumes\/GoogleDrive\/My\ Drive\/Home\/compiled_videos\/Lucy\ and\ Emily/'); echo $target_dir; rsync -rptgoD --no-owner --no-perms --no-group --progress --delete --delete-excluded "$n" "$target_dir"; echo "DONE"; if [ $count -ge 18 ] ; then echo "Sleeping"; sleep 7200; fi; (( count += base )); echo "Counter is" $count; done
+
+for i in {2009..2017}; do echo $i; nice -n 20 rsync -rptgoD --no-owner --no-perms --no-group --progress --delete --delete-excluded /Volumes/Archive/compiled_videos/Lucy\ and\ Emily/$i/ /Volumes/GoogleDrive/My\ Drive/Home/compiled_videos/Lucy\ and\ Emily/$i/; echo "DONE"; sleep 7200; done
+
+safeguards

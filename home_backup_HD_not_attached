@@ -1,0 +1,24 @@
+echo "iPhones"
+nice -n 20 rclone --delete-excluded --transfers 3 --checkers 3 --tpslimit 3 --drive-chunk-size 64M --fast-list --verbose sync /Volumes/iPhones/ gdrive:Home/iPhones/
+
+echo "Other Photos"
+nice -n 20 rclone --delete-excluded --transfers 3 --checkers 3 --tpslimit 3 --drive-chunk-size 64M --fast-list --verbose sync /Volumes/other_photos/ gdrive:Home/other_photos/
+
+echo "Go Pros"
+nice -n 20 rclone --delete-excluded --transfers 3 --checkers 3 --tpslimit 3 --drive-chunk-size 64M --fast-list --verbose sync /Volumes/Go\ Pros/ gdrive:Home/Go\ Pros/
+
+echo "Films"
+nice -n 20 rclone --delete-excluded --transfers 3 --checkers 3 --tpslimit 3 --drive-chunk-size 64M --fast-list --verbose sync /Volumes/films/ gdrive:Home/films/
+
+echo "iTunes"
+nice -n 20 rclone --delete-excluded --transfers 3 --checkers 3 --tpslimit 3 --drive-chunk-size 64M --fast-list --verbose sync /Volumes/iTunes/ gdrive:Home/iTunes/
+
+echo "files"
+nice -n 20 rclone --delete-excluded --transfers 3 --checkers 3 --tpslimit 3 --drive-chunk-size 64M --fast-list --verbose sync --delete-excluded --exclude /tmp --max-size 8G /Volumes/files/ gdrive:Home/files/
+
+echo "Olympus TG4"
+nice -n 20 rclone --delete-excluded --transfers 3 --checkers 3 --tpslimit 3 --drive-chunk-size 64M --fast-list --verbose sync /Volumes/olympus_tg4/ gdrive:Home/olympus_tg4/
+
+echo "Raw Photos"
+nice -n 20 rclone --delete-excluded --transfers 3 --checkers 3 --tpslimit 3 --drive-chunk-size 64M --fast-list --verbose sync /Volumes/raw_photos/ gdrive:Home/raw_photos/
+

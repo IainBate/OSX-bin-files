@@ -1,0 +1,12 @@
+rsync --rsh=ssh --archive --delete --verbose --times /Volumes/GoogleDrive/My\ Drive/misc/web_pages/draft/ /tmp/web_pages/
+cd /tmp
+chmod a+rx web_pages
+cd web_pages
+chmod -R a+r *
+chmod a+r .htaccess
+rm /tmp/web_pages/.htaccess
+chmod a+rx background images pubs 
+rsync --rsh=ssh --archive --delete --verbose --times /tmp/web_pages/ ijb500@compute1.cs.york.ac.uk://shared/storage/cs/www-users/ijb500/
+
+# rsync -aP --delete /Volumes/GoogleDrive/My\ Drive/misc/web_pages/draft/ ijb500@csresearch1.york.ac.uk:/shared/storage/cs/webstaff/ijb/
+# ssh ijb500@csresearch1.york.ac.uk chmod -R ug+rX,o-rwx /shared/storage/cs/webstaff/ijb/

@@ -1,0 +1,17 @@
+filename=$1
+genre=$2
+
+echo "Original file name:" $filename
+filename1=`basename "$filename"`
+prefix=$(echo ${filename1%.*})
+echo "Prefix:" $prefix
+prefix1=$(echo ${filename%.*})
+echo "Prefix:" $prefix 
+echo "Prefix1:" $prefix1
+new_filename="${prefix1}.mp4"
+echo "New file name:" ${new_filename}
+nice -n 20 ffmpeg -i "${filename}" -sn -map_chapters -1 -map_metadata -1 -map 0:v:0 -map 0:a:0 -metadata title="${prefix}" -metadata genre="$genre" -vf scale=1024:-2 -vcodec libx264 -b:v 900k -acodec libfdk_aac -b:a 96k -f mp4 -threads 0 tmp.mp4 </dev/null
+rm "${filename}"
+mv tmp.mp4 "${new_filename}"
+
+

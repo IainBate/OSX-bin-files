@@ -1,0 +1,2 @@
+rsync --rsh=ssh --archive --delete --delete-excluded --verbose --times --exclude /.Spotlight-V100 --exclude /.fseventsd --exclude /RECYCLER --exclude /.Trashes --exclude "/System Volume Information"  /Volumes/Other/ /Volumes/Home1/backup_of_Other/
+
