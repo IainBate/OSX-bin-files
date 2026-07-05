@@ -17,6 +17,7 @@ git push 2>/dev/null
 
 # Update all local git repos in $HOME subdirectories
 for repo in ~/*/; do
+  [ "$(basename "$repo")" = "bin" ] && continue
   # Skip if not a git repo
   git -C "$repo" rev-parse --git-dir >/dev/null 2>&1 || continue
   # Skip if no remote (bare or standalone repo)

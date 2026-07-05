@@ -80,12 +80,9 @@ readonly QUIT_GRACE=60         # Seconds to pause after sync complete before qui
                                # ensures we wait long enough for idle detection to trigger
                                # the quit sequence, giving Drive time to finish processing.
 readonly QUIT_TIMEOUT=30       # Max seconds to wait for Drive to quit cleanly before warning
-readonly POST_IDLE_GRACE=1200   # Extra seconds after cooldown to let Drive's internal queues drain
-                                # Extended to 20 min — Drive can continue internal processing for
-                                # 5-10+ minutes after file I/O stops. The log may still be fresh
-                                # during this time, so we can't rely on log staleness as a signal.
-                                # We poll the log for changes and re-check sync state if Drive
-                                # resumes syncing during the grace period.
+readonly POST_IDLE_GRACE=900   # Extra seconds after cooldown to let Drive's internal queues drain
+                               # Extended to 15 min — Drive was observed still syncing 6 min after
+                               # file I/O stopped. This grace period covers that gap.
 readonly STUCK_THRESHOLD=600   # Seconds of unchanged sync state before warning (10 min)
 
 # All output goes to stdout AND this file; delete the file to disable logging.
@@ -426,34 +423,36 @@ while true; do
     # Check cooldown threshold
     if (( consecutive_idle >= COOLDOWN_THRESHOLD )); then
         log "Sync complete — ${COOLDOWN_THRESHOLD} consecutive idle checks passed."
-        log "Waiting ${POST_IDLE_GRACE}s for Drive's internal queues to drain (polling log)..."
+        log "Waiting ${POST_IDLE_GRACE}s for Drive's internal queues to drain..."
 
-        # Poll the Drive log to see if it becomes fresh again.
-        # If the log was stale, Drive may still be processing internally.
-        # We wait for the log to be updated (Drive resumes writing) or
-        # for the grace period to expire (Drive has truly finished).
+        # Drive can continue internal processing for 5-10+ minutes after
+        # file I/O stops. We wait the full grace period, then re-check
+        # sync state. If Drive resumed syncing, reset and wait again.
         drain_start=$(date +%s)
         while true; do
+            # Check if grace period expired
+            drain_elapsed=$(( $(date +%s) - drain_start ))
+            if (( drain_elapsed >= POST_IDLE_GRACE )); then
+                # Re-check: is Drive still syncing?
+                if ! check_sync_state; then
+                    log "Drive is syncing again after grace period — resetting idle counter."
+                    consecutive_idle=0
+                    break
+                fi
+                log "Drive still idle after grace period — proceeding to quit."
+                break
+            fi
+            # If the log was previously stale and is now fresh, check immediately
             if [[ -f "$DRIVE_LOG" ]]; then
                 log_age=$(( $(date +%s) - $(stat -f "%m" "$DRIVE_LOG" 2>/dev/null || echo 0) ))
                 if (( log_age < QUIT_LOG_FRESHNESS )); then
-                    log "Drive log is fresh again — re-checking sync state..."
-                    # Re-check: is Drive still syncing?
+                    # Re-check every 30s while log is fresh
                     if ! check_sync_state; then
                         log "Drive is syncing again — resetting idle counter."
                         consecutive_idle=0
                         break
-                    else
-                        log "Drive still idle — proceeding to quit."
-                        break
                     fi
                 fi
-            fi
-            # Check if grace period expired
-            drain_elapsed=$(( $(date +%s) - drain_start ))
-            if (( drain_elapsed >= POST_IDLE_GRACE )); then
-                log "Grace period expired (${POST_IDLE_GRACE}s) — proceeding to quit."
-                break
             fi
             sleep 30
         done
