@@ -22,7 +22,6 @@ This is a personal utility scripts collection — not a software project. Script
 - `old_process_dirs/` — Alternative video processing pipelines
 - `old_backup_routines_for_mac/` — Archived backup scripts
 - `recover dropbox commands/` — Dropbox-specific utilities
-- `rclone/` — Rclone configuration/scripts
 
 ## Common patterns
 
