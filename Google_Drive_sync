@@ -71,11 +71,21 @@ readonly MIN_MONITOR_DURATION=120  # Minimum seconds before trusting any idle re
                                     # (guards against Drive's initial startup burst)
 readonly QUIESCENT_WINDOW=45   # Seconds of no file modification to consider directory "quiet"
 readonly LOG_TAIL_LINES=500    # Lines to inspect per check (~50 min of state blocks at 2-min intervals)
-readonly QUIT_GRACE=10         # Seconds to pause after sync complete before quitting
-                               # (guards against a new change arriving just as queues empty)
+readonly QUIT_LOG_FRESHNESS=300 # Seconds before Drive log is considered stale (5 min)
+                               # Drive writes a state block every ~2 min; if the log hasn't
+                               # been updated in 5 min, Drive has stopped writing blocks.
+readonly QUIT_GRACE=60         # Seconds to pause after sync complete before quitting
+                               # Extended from 10s — Drive stops writing to its log after sync
+                               # completes, so the log becomes stale after ~2 min. A 60s grace
+                               # ensures we wait long enough for idle detection to trigger
+                               # the quit sequence, giving Drive time to finish processing.
 readonly QUIT_TIMEOUT=30       # Max seconds to wait for Drive to quit cleanly before warning
-readonly POST_IDLE_GRACE=15    # Extra seconds after cooldown to let Drive's internal queues drain
-                               # (prevents the "Files are still syncing" quit dialog)
+readonly POST_IDLE_GRACE=1200   # Extra seconds after cooldown to let Drive's internal queues drain
+                                # Extended to 20 min — Drive can continue internal processing for
+                                # 5-10+ minutes after file I/O stops. The log may still be fresh
+                                # during this time, so we can't rely on log staleness as a signal.
+                                # We poll the log for changes and re-check sync state if Drive
+                                # resumes syncing during the grace period.
 readonly STUCK_THRESHOLD=600   # Seconds of unchanged sync state before warning (10 min)
 
 # All output goes to stdout AND this file; delete the file to disable logging.
@@ -168,16 +178,14 @@ check_sync_state() {
         return 1
     fi
 
-    # Check 4: Supplementary log indicator — change_ids_up_to_date
-    # Read from the Drive log if available, but don't fail if it's missing.
-    if [[ -f "$DRIVE_LOG" ]]; then
-        local change_id_state
-        change_id_state=$(grep -o 'change_ids_up_to_date: [a-z]*' "$DRIVE_LOG" 2>/dev/null | tail -1 | awk '{print $NF}')
-        if [[ "$change_id_state" == "false" ]]; then
-            log "Supplementary check: change_ids_up_to_date=false (Drive reconciling)"
-            return 1
-        fi
-    fi
+    # NOTE: Google Drive no longer logs change_ids_up_to_date in state blocks.
+    # The current state block format (as of 2026) only contains:
+    #   operation_queue_size, all_downloads, unique_user_requested_op_count
+    # Sync detection now relies entirely on file I/O checks:
+    #   1. Directory quiescence (no file modifications in QUIESCENT_WINDOW)
+    #   2. No active write handles on non-database files
+    # A long POST_IDLE_GRACE period covers the gap where Drive stops
+    # writing files but continues internal processing.
 
     # All checks passed — Drive appears idle.
     return 0
@@ -418,8 +426,37 @@ while true; do
     # Check cooldown threshold
     if (( consecutive_idle >= COOLDOWN_THRESHOLD )); then
         log "Sync complete — ${COOLDOWN_THRESHOLD} consecutive idle checks passed."
-        log "Waiting ${POST_IDLE_GRACE}s extra for Drive's internal queues to drain..."
-        sleep "$POST_IDLE_GRACE"
+        log "Waiting ${POST_IDLE_GRACE}s for Drive's internal queues to drain (polling log)..."
+
+        # Poll the Drive log to see if it becomes fresh again.
+        # If the log was stale, Drive may still be processing internally.
+        # We wait for the log to be updated (Drive resumes writing) or
+        # for the grace period to expire (Drive has truly finished).
+        drain_start=$(date +%s)
+        while true; do
+            if [[ -f "$DRIVE_LOG" ]]; then
+                log_age=$(( $(date +%s) - $(stat -f "%m" "$DRIVE_LOG" 2>/dev/null || echo 0) ))
+                if (( log_age < QUIT_LOG_FRESHNESS )); then
+                    log "Drive log is fresh again — re-checking sync state..."
+                    # Re-check: is Drive still syncing?
+                    if ! check_sync_state; then
+                        log "Drive is syncing again — resetting idle counter."
+                        consecutive_idle=0
+                        break
+                    else
+                        log "Drive still idle — proceeding to quit."
+                        break
+                    fi
+                fi
+            fi
+            # Check if grace period expired
+            drain_elapsed=$(( $(date +%s) - drain_start ))
+            if (( drain_elapsed >= POST_IDLE_GRACE )); then
+                log "Grace period expired (${POST_IDLE_GRACE}s) — proceeding to quit."
+                break
+            fi
+            sleep 30
+        done
         break
     fi
 

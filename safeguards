@@ -15,6 +15,17 @@ git add -A 2>/dev/null
 git diff --cached --quiet 2>/dev/null || git commit -m "auto: $(date +%F)" 2>/dev/null
 git push 2>/dev/null
 
+# Update all local git repos in $HOME subdirectories
+for repo in ~/*/; do
+  # Skip if not a git repo
+  git -C "$repo" rev-parse --git-dir >/dev/null 2>&1 || continue
+  # Skip if no remote (bare or standalone repo)
+  git -C "$repo" remote get-url origin >/dev/null 2>&1 || continue
+  (cd "$repo" && git add -A 2>/dev/null && \
+   git diff --cached --quiet 2>/dev/null || git commit -m "auto: $(date +%F)" 2>/dev/null && \
+   git push 2>/dev/null) || echo "WARN: failed to sync $(basename "$repo")"
+done
+
 # DATE=$(date "+%d_%m_%Y")
 # mkdir ~/WCET\ Confidence/auto_backup_of_routines/$DATE
 # find ~/WCET\ Confidence/ -maxdepth 1 -type f ! -name '.DS_Store' -exec gcp -avu {} ~/WCET\ Confidence/auto_backup_of_routines/$DATE/ \;
