@@ -80,9 +80,10 @@ readonly QUIT_GRACE=60         # Seconds to pause after sync complete before qui
                                # ensures we wait long enough for idle detection to trigger
                                # the quit sequence, giving Drive time to finish processing.
 readonly QUIT_TIMEOUT=30       # Max seconds to wait for Drive to quit cleanly before warning
-readonly POST_IDLE_GRACE=900   # Extra seconds after cooldown to let Drive's internal queues drain
-                               # Extended to 15 min — Drive was observed still syncing 6 min after
-                               # file I/O stopped. This grace period covers that gap.
+readonly POST_IDLE_GRACE=1800   # Extra seconds after cooldown to let Drive's internal queues drain
+                                # Extended to 30 min — Drive was observed still syncing 16 min
+                                # after idle detection. The file I/O checks pass before Drive
+                                # finishes syncing internally. This grace period covers that gap.
 readonly STUCK_THRESHOLD=600   # Seconds of unchanged sync state before warning (10 min)
 
 # All output goes to stdout AND this file; delete the file to disable logging.
@@ -175,14 +176,49 @@ check_sync_state() {
         return 1
     fi
 
-    # NOTE: Google Drive no longer logs change_ids_up_to_date in state blocks.
-    # The current state block format (as of 2026) only contains:
-    #   operation_queue_size, all_downloads, unique_user_requested_op_count
-    # Sync detection now relies entirely on file I/O checks:
-    #   1. Directory quiescence (no file modifications in QUIESCENT_WINDOW)
-    #   2. No active write handles on non-database files
-    # A long POST_IDLE_GRACE period covers the gap where Drive stops
-    # writing files but continues internal processing.
+    # NOTE: State block format (as of 2026):
+    #   operation_queue_size, all_downloads, unique_user_requested_op_count,
+    #   change_ids_up_to_date, largest_local_change_id, fetching_changes
+    #
+    # change_ids_up_to_date is the most reliable sync completion indicator.
+    # When false, Drive has NOT finished syncing even if operation_queue_size
+    # and all_downloads are both 0. The sync engine reports idle while the
+    # mirror subsystem is still processing changes (10-16+ min lag observed).
+    #
+    # fetching_changes == true means the sync engine is actively fetching
+    # changes from the server — a strong signal that sync is in progress.
+    #
+    # File I/O checks (directory quiescence + write handles) are the primary
+    # sync signals. change_ids_up_to_date and fetching_changes are used as
+    # supplementary indicators: if either shows activity, Drive is considered
+    # busy even if file I/O is quiet.
+
+    # Supplementary: check state block for change_ids_up_to_date and
+    # fetching_changes. These are reliable indicators that the sync engine
+    # has NOT finished even if file I/O is quiet (mirror subsystem lag).
+    if [[ -f "$DRIVE_LOG" ]]; then
+        local log_age
+        log_age=$(( $(date +%s) - $(stat -f "%m" "$DRIVE_LOG" 2>/dev/null || echo 0) ))
+        if (( log_age < QUIT_LOG_FRESHNESS )); then
+            # Parse the last state block for change_ids_up_to_date
+            local change_ids
+            change_ids=$(tail -500 "$DRIVE_LOG" 2>/dev/null | \
+                awk '/Sync engine activity state:/{found=1; next} found && /^$/{found=0} found && /change_ids_up_to_date:/{print $NF; found=0}' | tail -1)
+            if [[ "$change_ids" == "false" ]]; then
+                log "State block: change_ids_up_to_date=false (sync not complete)."
+                return 1
+            fi
+
+            # Parse fetching_changes — true means sync engine is actively fetching
+            local fetching
+            fetching=$(tail -500 "$DRIVE_LOG" 2>/dev/null | \
+                awk '/Sync engine activity state:/{found=1; next} found && /^$/{found=0} found && /fetching_changes:/{print $NF; found=0}' | tail -1)
+            if [[ "$fetching" == "true" ]]; then
+                log "State block: fetching_changes=true (sync engine active)."
+                return 1
+            fi
+        fi
+    fi
 
     # All checks passed — Drive appears idle.
     return 0
@@ -429,10 +465,11 @@ while true; do
         # file I/O stops. We wait the full grace period, then re-check
         # sync state. If Drive resumed syncing, reset and wait again.
         drain_start=$(date +%s)
+        grace_end=$(( drain_start + POST_IDLE_GRACE ))
         while true; do
             # Check if grace period expired
             drain_elapsed=$(( $(date +%s) - drain_start ))
-            if (( drain_elapsed >= POST_IDLE_GRACE )); then
+            if (( drain_elapsed >= POST_IDLE_GRACE )) && (( $(date +%s) >= grace_end )); then
                 # Re-check: is Drive still syncing?
                 if ! check_sync_state; then
                     log "Drive is syncing again after grace period — resetting idle counter."
@@ -442,13 +479,57 @@ while true; do
                 log "Drive still idle after grace period — proceeding to quit."
                 break
             fi
-            # If the log was previously stale and is now fresh, check immediately
+            # Check if log has become stale during grace period — if so,
+            # extend the deadline to account for mirror subsystem processing lag.
+            if [[ -f "$DRIVE_LOG" ]]; then
+                log_age=$(( $(date +%s) - $(stat -f "%m" "$DRIVE_LOG" 2>/dev/null || echo 0) ))
+                if (( log_age > QUIT_LOG_FRESHNESS )); then
+                    # Log went stale — mirror subsystem may still be processing.
+                    # Extend grace period by (time since log went stale + buffer)
+                    # to ensure we wait long enough for the mirror subsystem to finish.
+                    local stale_duration=$(( log_age - QUIT_LOG_FRESHNESS ))
+                    local extension=$(( stale_duration + 600 ))  # 10 min buffer
+                    grace_end=$(( grace_start + drain_elapsed + extension ))
+                    log "Log stale for ${log_age}s — extending grace period by $(( extension / 60 )) min."
+                fi
+            fi
+
+            # If the log is fresh, check the state block for all indicators.
             if [[ -f "$DRIVE_LOG" ]]; then
                 log_age=$(( $(date +%s) - $(stat -f "%m" "$DRIVE_LOG" 2>/dev/null || echo 0) ))
                 if (( log_age < QUIT_LOG_FRESHNESS )); then
-                    # Re-check every 30s while log is fresh
-                    if ! check_sync_state; then
-                        log "Drive is syncing again — resetting idle counter."
+                    # Parse the last state block for all sync indicators.
+                    op_queue=$(tail -500 "$DRIVE_LOG" 2>/dev/null | \
+                        awk '/Sync engine activity state:/{found=1; next} found && /^$/{found=0} found && /operation_queue_size:/{print $NF; found=0}' | tail -1)
+                    downloads=$(tail -500 "$DRIVE_LOG" 2>/dev/null | \
+                        awk '/Sync engine activity state:/{found=1; next} found && /^$/{found=0} found && /all_downloads:/{print $NF; found=0}' | tail -1)
+                    change_ids=$(tail -500 "$DRIVE_LOG" 2>/dev/null | \
+                        awk '/Sync engine activity state:/{found=1; next} found && /^$/{found=0} found && /change_ids_up_to_date:/{print $NF; found=0}' | tail -1)
+                    fetching=$(tail -500 "$DRIVE_LOG" 2>/dev/null | \
+                        awk '/Sync engine activity state:/{found=1; next} found && /^$/{found=0} found && /fetching_changes:/{print $NF; found=0}' | tail -1)
+
+                    if [[ -n "$op_queue" && "$op_queue" != "0" ]]; then
+                        log "Drive has ${op_queue} pending operation(s) in state block — resetting idle counter."
+                        consecutive_idle=0
+                        break
+                    fi
+                    if [[ -n "$downloads" && "$downloads" != "0" ]]; then
+                        log "Drive has ${downloads} pending download(s) in state block — resetting idle counter."
+                        consecutive_idle=0
+                        break
+                    fi
+                    if [[ "$change_ids" == "false" ]]; then
+                        log "State block: change_ids_up_to_date=false — sync not complete, extending grace period by 10 min."
+                        consecutive_idle=0
+                        grace_end=$(( $(date +%s) + 600 ))
+                        break
+                    fi
+                    if [[ "$change_ids" == "true" ]]; then
+                        log "State block: change_ids_up_to_date=true — sync confirmed complete, exiting grace period early."
+                        break
+                    fi
+                    if [[ "$fetching" == "true" ]]; then
+                        log "State block: fetching_changes=true — sync engine actively fetching."
                         consecutive_idle=0
                         break
                     fi

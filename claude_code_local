@@ -1,0 +1,28 @@
+#!/bin/zsh
+# claude_code_local — Run Claude Code with local Ollama model
+# Usage: claude_code_local "your prompt"
+#        claude_code_local --model qwen3:32b --prompt "your prompt"
+#
+# Connects to Ollama on localhost:11434 (Apple Silicon optimized).
+# Default model: qwen3:32b (Q5_K_M, ~22 GB, general-purpose).
+# Optimized for M5 MacBook with 32 GB RAM.
+
+export ANTHROPIC_BASE_URL="${ANTHROPIC_BASE_URL:-http://localhost:11434}"
+export ANTHROPIC_AUTH_TOKEN="${ANTHROPIC_AUTH_TOKEN:-ollama}"
+export CLAUDE_API_KEY="${CLAUDE_API_KEY:-}"
+
+# Model parameters for M5 / 32 GB RAM
+# Q5_K_M quantization: ~22 GB VRAM, good quality
+# 131k context window, medium thinking
+export OLLAMA_NUM_PARALLEL=1
+export OLLAMA_MAX_LOADED_MODELS=1
+export OLLAMA_FLASH_ATTENTION=1
+
+# Start Ollama if not running
+if ! lsof -i :11434 &>/dev/null; then
+    echo "Starting Ollama server..."
+    ollama serve &
+    sleep 3
+fi
+
+exec claude --model qwen3:32b "$@"
