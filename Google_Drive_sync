@@ -95,6 +95,12 @@ readonly LOCK_FILE="${TMPDIR:-/tmp}/gdrive_sync.lock"
 # Caffeinate PID — killed on exit to release power assertions.
 CAFFEENATE_PID=""
 
+# Known issues file — tracks unresolvable items across runs.
+readonly KNOWN_ISSUES_FILE="${HOME}/.gdrive_sync_known_issues.json"
+
+# Credentials file — stores Google Drive API OAuth tokens.
+readonly CREDENTIALS_FILE="${HOME}/.gdrive_sync_credentials.json"
+
 # UTC launch time — used to ignore state blocks predating this script run.
 SCRIPT_START=$(date -u '+%Y-%m-%dT%H:%M:%S')
 readonly SCRIPT_START
@@ -123,6 +129,406 @@ is_drive_running() {
     pgrep -qf "/Applications/Google Drive.app"
 }
 
+# ── Known Issues ───────────────────────────────────────────────────────────────
+# Tracks unresolvable items across runs so future runs can exit sooner.
+# Returns known items as lines of "type:id" (e.g. "unavailable_resource:0BzGM...")
+
+load_known_issues() {
+    if [[ ! -f "$KNOWN_ISSUES_FILE" ]]; then
+        return
+    fi
+    python3 - "$KNOWN_ISSUES_FILE" 2>/dev/null << 'PYEOF'
+import json, sys
+
+try:
+    with open(sys.argv[1]) as f:
+        data = json.load(f)
+except (json.JSONDecodeError, OSError):
+    sys.exit(0)
+
+for error_type, items in data.items():
+    if not isinstance(items, dict):
+        continue
+    for item_id, info in items.items():
+        print(f"{error_type}:{item_id}")
+PYEOF
+}
+
+save_known_issues() {
+    # $1 = lines of "type:id" to save (one per line)
+    python3 - "$KNOWN_ISSUES_FILE" "$1" 2>/dev/null << 'PYEOF'
+import json, sys, os
+from datetime import datetime, timezone
+
+known_file = sys.argv[1]
+new_items = sys.argv[2].strip()
+
+# Load existing data
+data = {}
+if os.path.exists(known_file):
+    try:
+        with open(known_file) as f:
+            data = json.load(f)
+    except (json.JSONDecodeError, OSError):
+        data = {}
+
+now = datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
+
+for line in new_items.split('\n'):
+    line = line.strip()
+    if not line or ':' not in line:
+        continue
+    error_type, item_id = line.split(':', 1)
+    if error_type not in data:
+        data[error_type] = {}
+    if item_id not in data[error_type]:
+        data[error_type][item_id] = {"first_seen": now, "count": 0}
+    data[error_type][item_id]["count"] += 1
+
+# Write back
+with open(known_file, 'w') as f:
+    json.dump(data, f, indent=2)
+PYEOF
+}
+
+# Given error output (multi-line), returns 0 if all detected items are known,
+# 1 if some are new, 2 on error.
+check_known_issues() {
+    local error_output="$1"
+    local known_items
+    known_items=$(load_known_issues)
+    local all_known=1
+    local new_items=""
+
+    while IFS= read -r line; do
+        [[ -z "$line" ]] && continue
+        # Extract type and id from DETAIL lines
+        local detail_type item_id
+        detail_type=$(echo "$line" | sed -n 's/^DETAIL:\([^ ]*\) .*/\1/p')
+        item_id=$(echo "$line" | sed -n 's/^DETAIL:[^ ]* \(.*\)/\1/p')
+        [[ -z "$detail_type" || -z "$item_id" ]] && continue
+
+        if ! echo "$known_items" | grep -q "^${detail_type}:${item_id}$"; then
+            all_known=0
+            new_items="${new_items}${detail_type}:${item_id}
+"
+        fi
+    done <<< "$error_output"
+
+    # Save any new items
+    if [[ -n "$new_items" ]]; then
+        save_known_issues "$new_items"
+    fi
+
+    return $(( 1 - all_known ))
+}
+
+# ── Delete Known Ghost Items via Google Drive API ──────────────────────────────
+# Deletes UNAVAILABLE_RESOURCE items that are safe to remove.
+# PERMISSION_DENIED and NOT_FOUND items are listed for manual review.
+
+delete_known_items() {
+    local known_data
+    known_data=$(load_known_issues)
+    if [[ -z "$known_data" ]]; then
+        log "No known issues to process."
+        return
+    fi
+
+    # Group items by error type
+    local unavail_ids="" unavail_count=0
+    local perm_ids="" perm_count=0
+    local notfound_ids="" notfound_count=0
+
+    while IFS= read -r line; do
+        [[ -z "$line" ]] && continue
+        local etype eid
+        etype="${line%%:*}"
+        eid="${line#*:}"
+        [[ -z "$etype" || -z "$eid" ]] && continue
+
+        case "$etype" in
+            unavailable_resource)
+                (( unavail_count++ ))
+                unavail_ids="${unavail_ids}${eid}
+"
+                ;;
+            permission_denied)
+                (( perm_count++ ))
+                perm_ids="${perm_ids}${eid}
+"
+                ;;
+            not_found)
+                (( notfound_count++ ))
+                notfound_ids="${notfound_ids}${eid}
+"
+                ;;
+        esac
+    done <<< "$known_data"
+
+    if (( unavail_count == 0 && perm_count == 0 && notfound_count == 0 )); then
+        log "No known issues to process."
+        return
+    fi
+
+    log ""
+    log "=== Known issues to process ==="
+    if (( unavail_count > 0 )); then
+        log "  UNAVAILABLE_RESOURCE: ${unavail_count} item(s) — safe to delete (content gone from server)"
+    fi
+    if (( perm_count > 0 )); then
+        log "  PERMISSION_DENIED: ${perm_count} item(s) — needs manual review (no permission)"
+    fi
+    if (( notfound_count > 0 )); then
+        log "  NOT_FOUND: ${notfound_count} item(s) — needs manual review (hidden shared drive)"
+    fi
+    log ""
+
+    if (( unavail_count > 0 )); then
+        log "Total deletable: ${unavail_count} item(s)"
+        printf "Delete them? [y/N]: "
+        local confirm
+        if read -t 300 confirm; then
+            confirm="${confirm:-n}"
+        else
+            log "No input received after 300s — aborting."
+            return
+        fi
+        if [[ "$(echo "$confirm" | tr '[:upper:]' '[:lower:]')" != "y" ]]; then
+            log "Aborted."
+            return
+        fi
+    fi
+
+    # Check credentials
+    if [[ ! -f "$CREDENTIALS_FILE" ]]; then
+        log "No Google Drive API credentials found."
+        log "To set up, visit https://console.cloud.google.com/apis/drive and:"
+        log "  1. Create a new project (or select existing)"
+        log "  2. Enable the Drive API"
+        log "  3. Create OAuth 2.0 credentials (Desktop app type)"
+        log "  4. Download the JSON file and copy the client_id and client_secret"
+        log "  5. Run this script with --delete-known again"
+        log ""
+        log "Alternatively, paste your client_id and client_secret now:"
+        printf "Client ID: "
+        local client_id
+        if read -t 300 client_id; then
+            [[ -z "$client_id" ]] && { log "Aborted."; return; }
+        else
+            log "No input received — aborting."
+            return
+        fi
+        printf "Client Secret: "
+        local client_secret
+        if read -t 300 client_secret; then
+            [[ -z "$client_secret" ]] && { log "Aborted."; return; }
+        else
+            log "No input received — aborting."
+            return
+        fi
+        # Save credentials and do OAuth flow
+        python3 - "$CREDENTIALS_FILE" "$client_id" "$client_secret" << 'PYEOF'
+import json, sys, webbrowser
+from http.server import HTTPServer, BaseHTTPRequestHandler
+from urllib.parse import urlparse, parse_qs
+import urllib.request
+import urllib.error
+
+credentials_file = sys.argv[1]
+client_id = sys.argv[2]
+client_secret = sys.argv[3]
+
+# Save credentials
+creds = {"client_id": client_id, "client_secret": client_secret}
+with open(credentials_file, 'w') as f:
+    json.dump(creds, f, indent=2)
+
+# OAuth flow
+redirect_uri = 'http://localhost:8080/callback'
+auth_url = (
+    f'https://accounts.google.com/o/oauth2/v2/auth'
+    f'?client_id={client_id}'
+    f'&redirect_uri={redirect_uri}'
+    f'&response_type=code'
+    f'&scope=https://www.googleapis.com/auth/drive'
+    f'&access_type=offline'
+)
+
+print(f'\nOpening browser for authorization...')
+print(f'If the browser does not open, visit:')
+print(f'{auth_url}\n')
+webbrowser.open(auth_url)
+
+class Handler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        parsed = urlparse(self.path)
+        if parsed.path == '/callback':
+            code = parse_qs(parsed.query).get('code', [None])[0]
+            if code:
+                # Exchange code for token
+                token_url = 'https://oauth2.googleapis.com/token'
+                data = (
+                    f'code={code}'
+                    f'&client_id={client_id}'
+                    f'&client_secret={client_secret}'
+                    f'&redirect_uri={redirect_uri}'
+                    f'&grant_type=authorization_code'
+                ).encode()
+                req = urllib.request.Request(token_url, data=data, method='POST')
+                req.add_header('Content-Type', 'application/x-www-form-urlencoded')
+                try:
+                    resp = urllib.request.urlopen(req)
+                    token_data = json.loads(resp.read())
+                    refresh_token = token_data.get('refresh_token', '')
+                    if refresh_token:
+                        creds['refresh_token'] = refresh_token
+                        with open(credentials_file, 'w') as f:
+                            json.dump(creds, f, indent=2)
+                        print('\nCredentials saved successfully.')
+                    else:
+                        print('\nError: No refresh token received.')
+                except urllib.error.HTTPError as e:
+                    print(f'\nError exchanging code: {e.code} {e.read().decode()}')
+            else:
+                print('\nError: No authorization code received.')
+            self.send_response(200)
+            self.send_header('Content-Type', 'text/html')
+            self.end_headers()
+            self.wfile.write(b'<html><body><h1>Authorization complete!</h1><p>You can close this window.</p></body></html>')
+            server.shutdown()
+
+server = HTTPServer(('localhost', 8080), Handler)
+print('Waiting for authorization...')
+server.handle_request()
+PYEOF
+        if [[ ! -f "$CREDENTIALS_FILE" ]]; then
+            log "Failed to save credentials. Aborting."
+            return
+        fi
+    fi
+
+    # Check if google-api-python-client is installed
+    if ! python3 -c "import googleapiclient.discovery" 2>/dev/null; then
+        log "google-api-python-client not installed. Installing..."
+        pip3 install google-api-python-client 2>/dev/null || {
+            log "Failed to install google-api-python-client."
+            log "Install manually: pip3 install google-api-python-client"
+            return
+        }
+        log "Installed."
+    fi
+
+    # Delete items
+    log ""
+    log "Deleting ${unavail_count} UNAVAILABLE_RESOURCE item(s)..."
+    local success_count=0 fail_count=0 fail_details=""
+
+    while IFS= read -r item_id; do
+        [[ -z "$item_id" ]] && continue
+        result=$(python3 - "$CREDENTIALS_FILE" "$item_id" 2>/dev/null << 'PYEOF'
+import json, sys
+from googleapiclient.discovery import build
+
+credentials_file = sys.argv[1]
+item_id = sys.argv[2]
+
+with open(credentials_file) as f:
+    creds = json.load(f)
+
+try:
+    service = build('drive', 'v3', credentials=None)
+    # Use refresh token directly (credentials object is None)
+    from google.oauth2.credentials import Credentials
+    credentials = Credentials(
+        token=None,
+        refresh_token=creds.get('refresh_token', ''),
+        client_id=creds.get('client_id', ''),
+        client_secret=creds.get('client_secret', '')
+    )
+    service = build('drive', 'v3', credentials=credentials)
+    service.files().delete(fileId=item_id).execute()
+    print('OK')
+except Exception as e:
+    print(f'FAIL: {e}')
+PYEOF
+        )
+        if [[ "$result" == "OK" ]]; then
+            (( success_count++ ))
+        else
+            (( fail_count++ ))
+            fail_details="${fail_details}  ${item_id}: ${result}
+"
+        fi
+    done <<< "$unavail_ids"
+
+    log ""
+    log "=== Delete results ==="
+    log "  Successful: ${success_count}"
+    if (( fail_count > 0 )); then
+        log "  Failed: ${fail_count}"
+        log "$fail_details"
+    fi
+
+    # Remove successfully deleted items from known issues
+    if (( success_count > 0 )); then
+        python3 - "$KNOWN_ISSUES_FILE" "$unavail_ids" << 'PYEOF'
+import json, sys
+
+known_file = sys.argv[1]
+deleted_ids = sys.argv[2].strip()
+
+try:
+    with open(known_file) as f:
+        data = json.load(f)
+except (json.JSONDecodeError, OSError):
+    sys.exit(0)
+
+deleted_set = set()
+for line in deleted_ids.split('\n'):
+    line = line.strip()
+    if line:
+        deleted_set.add(line)
+
+if 'unavailable_resource' in data:
+    for item_id in deleted_set:
+        if item_id in data['unavailable_resource']:
+            del data['unavailable_resource'][item_id]
+    if not data['unavailable_resource']:
+        del data['unavailable_resource']
+
+with open(known_file, 'w') as f:
+    json.dump(data, f, indent=2)
+PYEOF
+        log "Removed successfully deleted items from known issues file."
+    fi
+
+    # List items needing manual review
+    if (( perm_count > 0 )); then
+        log ""
+        log "=== Items needing manual review ==="
+        log "PERMISSION_DENIED (${perm_count} items):"
+        while IFS= read -r item_id; do
+            [[ -z "$item_id" ]] && continue
+            log "  ${item_id}  →  https://drive.google.com/search?q=${item_id}"
+        done <<< "$perm_ids"
+        log "  These items had their access revoked. Check the source shared drive"
+        log "  for the latest permissions or ask the owner to re-share."
+        log ""
+    fi
+    if (( notfound_count > 0 )); then
+        log "NOT_FOUND (${notfound_count} items):"
+        while IFS= read -r item_id; do
+            [[ -z "$item_id" ]] && continue
+            log "  StableId: ${item_id}"
+        done <<< "$notfound_ids"
+        log "  These are items Drive can't find in hidden shared drives."
+        log "  Check https://drive.google.com/drive/my-drive for the source"
+        log "  shared drives or https://drive.google.com/trash."
+        log ""
+    fi
+}
+
 # ── Sync State Detection (multi-source) ───────────────────────────────────────
 # Returns 0 if Drive appears idle, 1 if active, 2 on error.
 #
@@ -147,9 +553,18 @@ check_sync_state() {
     # user-facing synced content) rather than the internal DriveFS cache,
     # because the cache contains SQLite files (.db, .db-wal, .db-shm) that
     # are written to constantly even when Drive is idle.
+    #
+    # Exclusions:
+    #   - Google Docs/Sheets/Slides files (.gdoc, .gsheet, .gslides, .gform, .gxml)
+    #     These are stored on Google's servers, not locally. Drive only syncs
+    #     metadata, and the proxy file's modification time changes whenever
+    #     anyone edits the doc remotely. They can never be "quiescent."
+    #   - Symlinks (aliases/shortcuts) — excluded by -type f (only regular files).
     local modified=""
     if [[ -d "$DRIVE_SYNCED" ]]; then
         modified=$(find "$DRIVE_SYNCED" -type f \
+            -not -name "*.gdoc" -not -name "*.gsheet" -not -name "*.gslides" \
+            -not -name "*.gform" -not -name "*.gxml" \
             -mmin -"${QUIESCENT_WINDOW}" \
             2>/dev/null | head -1)
     fi
@@ -168,6 +583,10 @@ check_sync_state() {
             path = $NF
             # Skip database files: .db, .db-wal, .db-shm
             if (path ~ /\.db$/ || path ~ /\.db-wal$/ || path ~ /\.db-shm$/) next
+            # Skip Google Docs/Sheets/Slides proxy files — these are stored
+            # on Google servers, not locally. Drive updates their timestamps
+            # whenever anyone edits the doc remotely.
+            if (path ~ /\.gdoc$/ || path ~ /\.gsheet$/ || path ~ /\.gslides$/ || path ~ /\.gform$/ || path ~ /\.gxml$/) next
             print path
         }' | head -1)
 
@@ -225,9 +644,12 @@ check_sync_state() {
 }
 
 # ── Error Detection (supplementary) ────────────────────────────────────────────
-# Scans the Drive log for known error patterns. Returns a summary string
-# or "none" if nothing found. This is the SAME logic as the original script
-# but now used for context, not as the primary sync signal.
+# Scans the Drive log for known error patterns. Returns:
+#   Line 1: summary string ("none" if nothing found)
+#   Subsequent lines: detailed IDs (prefixed with "DETAIL:")
+#     DETAIL:not_found <stableid>  — NOT_FOUND error with StableId
+#     DETAIL:unavailable_resource <item_id>  — UNAVAILABLE_RESOURCE with item ID
+#     DETAIL:permission_denied <item_id>  — PERMISSION_DENIED with item ID
 detect_errors() {
     if [[ ! -f "$DRIVE_LOG" ]]; then
         echo "none"
@@ -240,56 +662,71 @@ from collections import Counter
 
 
 def scan_errors(tail):
-    """Scans the given lines for known error patterns and returns a short,
-    human-readable summary string (or 'none' if nothing found).
+    """Scans the given lines for known error patterns and returns a summary
+    string (or 'none' if nothing found) plus detailed IDs.
 
     Covers two distinct patterns seen in Drive's log:
       1. "... due to non-retriable error: REASON" -- a single-line pattern
          from file_provider_change_replayer.cc, logged when Drive gives up
          retrying a specific change (e.g., an item it can no longer access).
+         Extracts the StableId from the change record.
       2. "cloud_get_failures { key: \"...\" value { status: X reason: \"Y\" } }"
          -- a multi-line block logged when a server-side fetch fails outright
-         (e.g., PERMISSION_DENIED). Not covered by pattern 1.
+         (e.g., PERMISSION_DENIED). Extracts the item key (Google Drive ID).
     """
-    non_retriable_count = 0
-    non_retriable_reasons = set()
+    non_retriable = []  # list of (stableid, reason) tuples
+    cloud_failures = []  # list of (item_id, status) tuples
 
     for line in tail:
         m = re.search(r'non-retriable error:\s*([^:]+)', line)
         if m:
-            non_retriable_count += 1
-            non_retriable_reasons.add(m.group(1).strip())
+            reason = m.group(1).strip()
+            # Extract StableId from the change record
+            sid = re.search(r'StableId:\s*value=(\d+)', line)
+            stableid = sid.group(1) if sid else 'unknown'
+            non_retriable.append((stableid, reason))
 
-    permission_statuses = []
     i = 0
     while i < len(tail):
         if 'cloud_get_failures' in tail[i]:
+            key = None
             status = None
             j = i + 1
             while j < len(tail) and j < i + 8:
+                km = re.search(r'key:\s*"([^"]+)"', tail[j])
+                if km:
+                    key = km.group(1)
                 sm = re.search(r'status:\s*(\w+)', tail[j])
                 if sm:
                     status = sm.group(1)
-                if '}' in tail[j] and status is not None:
+                if '}' in tail[j] and key is not None:
                     break
                 j += 1
-            if status:
-                permission_statuses.append(status)
+            if key and status:
+                cloud_failures.append((key, status))
             i = max(j, i + 1)
             continue
         i += 1
 
+    # Summary line
     parts = []
-    if non_retriable_count:
-        reasons = ', '.join(sorted(non_retriable_reasons)) if non_retriable_reasons else 'unspecified'
-        parts.append(f'{non_retriable_count} non-retriable change-replay error(s) [{reasons}]')
+    if non_retriable:
+        reasons = sorted(set(r for _, r in non_retriable))
+        parts.append(f'{len(non_retriable)} non-retriable change-replay error(s) [{", ".join(reasons)}]')
 
-    if permission_statuses:
-        counts = Counter(permission_statuses)
-        breakdown = ', '.join(f'{n}x {status}' for status, n in counts.most_common())
-        parts.append(f'{len(permission_statuses)} cloud fetch failure(s) [{breakdown}]')
+    if cloud_failures:
+        counts = Counter(s for _, s in cloud_failures)
+        breakdown = ', '.join(f'{n}x {s}' for s, n in counts.most_common())
+        parts.append(f'{len(cloud_failures)} cloud fetch failure(s) [{breakdown}]')
 
-    return '; '.join(parts) if parts else 'none'
+    summary = '; '.join(parts) if parts else 'none'
+    print(summary)
+
+    # Detail lines
+    for stableid, reason in non_retriable:
+        print(f'DETAIL:not_found {stableid}')
+    for item_id, status in cloud_failures:
+        print(f'DETAIL:{status.lower().replace(" ", "_")} {item_id}')
 
 
 def main():
@@ -304,15 +741,50 @@ def main():
         return
 
     tail = lines[-tail_lines:]
-    print(scan_errors(tail))
+    scan_errors(tail)
 
 
 try:
-    sys.exit(main())
+    main()
 except Exception:
     print('parser error')
     sys.exit(1)
 PYEOF
+}
+
+# ── Quit Drive helper ──────────────────────────────────────────────────────────
+# Ensures Google Drive is terminated before the script exits.
+# Called by the EXIT trap and by early-exit paths that skip the main quit section.
+
+quit_drive() {
+    if ! is_drive_running; then
+        return
+    fi
+    log "Quitting ${DRIVE_APP}..."
+
+    osascript -e "quit app \"${DRIVE_APP}\"" 2>/dev/null || true
+    local quit_elapsed=0
+    while is_drive_running && (( quit_elapsed < QUIT_TIMEOUT )); do
+        sleep 2
+        quit_elapsed=$(( quit_elapsed + 2 ))
+    done
+
+    if is_drive_running; then
+        log "Drive still running after quit timeout — sending SIGTERM..."
+        pkill -TERM -f "/Applications/Google Drive.app" 2>/dev/null || true
+        quit_elapsed=0
+        while is_drive_running && (( quit_elapsed < QUIT_TIMEOUT )); do
+            sleep 2
+            quit_elapsed=$(( quit_elapsed + 2 ))
+        done
+    fi
+
+    if is_drive_running; then
+        log "WARNING: ${DRIVE_APP} is still running after quit attempts."
+        log "         It may be processing a final write. Check Activity Monitor if it persists."
+    else
+        log "${DRIVE_APP} has exited cleanly."
+    fi
 }
 
 # ── Traps ─────────────────────────────────────────────────────────────────────
@@ -328,6 +800,83 @@ command -v python3 &>/dev/null || \
 if [[ ! -d "/Applications/Google Drive.app" ]] && \
    [[ ! -d "${HOME}/Applications/Google Drive.app" ]]; then
     die "Google Drive is not installed (checked /Applications and ~/Applications)."
+fi
+
+# ── Force reset DriveFS cache (removes all cached sync state) ────────────────
+force_reset() {
+    # Find the DriveFS user directory
+    local drivefs_user_dir
+    drivefs_user_dir=$(find "${HOME}/Library/Application Support/Google/DriveFS" -maxdepth 1 -type d -name '[0-9]*' 2>/dev/null | head -1)
+
+    if [[ -z "$drivefs_user_dir" ]]; then
+        log "ERROR: Could not find DriveFS user directory."
+        log "       Expected location: ${HOME}/Library/Application Support/Google/DriveFS/"
+        return 1
+    fi
+
+    log "Force reset of DriveFS cache:"
+    log "  User directory: ${drivefs_user_dir}"
+
+    # List what we're deleting
+    local items_to_delete=()
+    for item in "$drivefs_user_dir"/*; do
+        [[ -e "$item" ]] && items_to_delete+=("$(basename "$item")")
+    done
+
+    log "  Items to delete: ${items_to_delete[*]}"
+
+    # Remove the user directory
+    if rm -rf "$drivefs_user_dir"; then
+        log "DriveFS cache cleared successfully."
+        return 0
+    else
+        log "ERROR: Failed to clear DriveFS cache."
+        return 1
+    fi
+}
+
+# ── Handle --clear-known flag ──────────────────────────────────────────────────
+if [[ "${1:-}" == "--clear-known" ]]; then
+    if [[ -f "$KNOWN_ISSUES_FILE" ]]; then
+        rm -f "$KNOWN_ISSUES_FILE"
+        log "Known issues file cleared: ${KNOWN_ISSUES_FILE}"
+    else
+        log "No known issues file to clear."
+    fi
+    exit 0
+fi
+
+# ── Handle --force-reset flag ──────────────────────────────────────────────────
+# Clears DriveFS cache and known issues file, forcing a fresh sync state.
+if [[ "${1:-}" == "--force-reset" ]]; then
+    if is_drive_running; then
+        log "Quitting Google Drive before force reset..."
+        osascript -e "quit app \"${DRIVE_APP}\""
+        sleep 3
+    fi
+
+    # Clear known issues first
+    if [[ -f "$KNOWN_ISSUES_FILE" ]]; then
+        rm -f "$KNOWN_ISSUES_FILE"
+        log "Known issues file cleared: ${KNOWN_ISSUES_FILE}"
+    fi
+
+    # Force reset DriveFS cache
+    force_reset || die "Force reset failed."
+
+    log ""
+    log "Force reset complete. You can now restart Google Drive for a fresh sync."
+    exit 0
+fi
+
+# ── Handle --delete-known flag ─────────────────────────────────────────────────
+# Attempts to delete UNAVAILABLE_RESOURCE items via Google Drive API.
+# Only UNAVAILABLE_RESOURCE items are deleted (safe — content already gone from server).
+# PERMISSION_DENIED and NOT_FOUND items are listed for manual review.
+if [[ "${1:-}" == "--delete-known" ]]; then
+    log "=== Processing known issues ==="
+    delete_known_items
+    exit 0
 fi
 
 # ── 2. Single-instance lock ────────────────────────────────────────────────────
@@ -370,6 +919,85 @@ until is_drive_running; do
 done
 log "Drive process is running."
 
+# ── 5b. Early inaccessible-item error check ────────────────────────────────────
+# Check for errors that indicate Drive is stuck retrying items that no longer
+# exist on the server (deleted from shared drives) or have had access revoked.
+# These errors will never resolve on their own — Drive retries them indefinitely.
+# The user is warned so they can check via the web UI if they want.
+# The script continues monitoring because Drive may still be syncing syncable items.
+# Known issues are tracked across runs to exit sooner on future encounters.
+if [[ -f "$DRIVE_LOG" ]]; then
+    early_error_output=$(detect_errors)
+    early_error_msg=$(echo "$early_error_output" | head -1)
+    if [[ "$early_error_msg" != "none" ]] && [[ "$early_error_msg" == *"UNAVAILABLE_RESOURCE"* || "$early_error_msg" == *"NOT_FOUND"* ]]; then
+        log ""
+        log "Drive is retrying items that can't be resolved:"
+        log "  ${early_error_msg}"
+        log ""
+
+        # Check which errors are known vs new
+        all_known=1
+        new_items=""
+        known_count=0
+        new_count=0
+        while IFS= read -r line; do
+            [[ -z "$line" ]] && continue
+            detail_type=$(echo "$line" | sed -n 's/^DETAIL:\([^ ]*\) .*/\1/p')
+            item_id=$(echo "$line" | sed -n 's/^DETAIL:[^ ]* \(.*\)/\1/p')
+            [[ -z "$detail_type" || -z "$item_id" ]] && continue
+
+            if [[ "$detail_type" == "not_found" ]]; then
+                type_label="NOT_FOUND"
+            elif [[ "$detail_type" == "unavailable_resource" ]]; then
+                type_label="UNAVAILABLE_RESOURCE"
+            elif [[ "$detail_type" == "permission_denied" ]]; then
+                type_label="PERMISSION_DENIED"
+            else
+                type_label="$detail_type"
+            fi
+
+            if load_known_issues | grep -q "^${detail_type}:${item_id}$"; then
+                (( known_count++ ))
+            else
+                all_known=0
+                (( new_count++ ))
+                new_items="${new_items}${detail_type}:${item_id}
+"
+                log "  NEW: ${type_label} ${item_id}"
+            fi
+        done <<< "$early_error_output"
+
+        if [[ $known_count -gt 0 ]]; then
+            log "  ${known_count} known item(s) (seen in previous runs)"
+        fi
+        if [[ $new_count -gt 0 ]]; then
+            log "  ${new_count} new item(s) — saved for future runs."
+            save_known_issues "$new_items"
+        fi
+        if (( all_known )); then
+            log "  All detected errors are known items. Drive has been stuck on these before."
+        fi
+
+        log ""
+        log "  UNAVAILABLE_RESOURCE = items deleted from shared drives (404)."
+        log "  NOT_FOUND            = items Drive can't find in hidden shared drives."
+        log "  PERMISSION_DENIED    = items whose access was revoked."
+        log ""
+        log "  These items will never sync. Drive retries them forever."
+        log "  File names cannot be determined locally."
+        log ""
+        log "  When Drive finishes syncing syncable items, this script will"
+        log "  exit automatically. If you want to resolve these errors,"
+        log "  check https://drive.google.com/drive/my-drive for the source"
+        log "  shared drives or https://drive.google.com/trash."
+        log "  Use ${0##*/} --clear-known to clear the known issues file."
+        log ""
+    fi
+fi
+
+# Track whether all detected errors are known items (set during monitoring).
+all_errors_known=0
+
 # ── 6. Monitor sync state ──────────────────────────────────────────────────────
 log "Monitoring sync (multi-source detection; timeout: ${SYNC_TIMEOUT}s)..."
 log "Script log: ${SCRIPT_LOG}"
@@ -397,13 +1025,42 @@ while true; do
     fi
 
     # Check for sync errors (supplementary context)
-    error_msg=$(detect_errors)
+    error_output=$(detect_errors)
+    error_msg=$(echo "$error_output" | head -1)
     if [[ "$error_msg" != "none" ]] && (( errors_ever_seen == 0 )); then
-        log "NOTE: Sync-related errors detected in Drive's log: ${error_msg}"
+        log "Sync-related errors detected in Drive's log: ${error_msg}"
         log "      This can explain a slow sync (Drive may be repeatedly retrying"
         log "      inaccessible items). Search ${DRIVE_LOG} for these patterns,"
         log "      or check Drive's web UI for items you may have lost access to."
         errors_ever_seen=1
+    fi
+
+    # Check which errors are known vs new and update all_errors_known
+    new_items_loop=""
+    all_known_loop=1
+    known_count_loop=0
+    new_count_loop=0
+    while IFS= read -r line; do
+        [[ -z "$line" ]] && continue
+        detail_type=$(echo "$line" | sed -n 's/^DETAIL:\([^ ]*\) .*/\1/p')
+        item_id=$(echo "$line" | sed -n 's/^DETAIL:[^ ]* \(.*\)/\1/p')
+        [[ -z "$detail_type" || -z "$item_id" ]] && continue
+
+        if load_known_issues | grep -q "^${detail_type}:${item_id}$"; then
+            (( known_count_loop++ ))
+        else
+            all_known_loop=0
+            (( new_count_loop++ ))
+            new_items_loop="${new_items_loop}${detail_type}:${item_id}
+"
+        fi
+    done <<< "$error_output"
+
+    if [[ -n "$new_items_loop" ]]; then
+        save_known_issues "$new_items_loop"
+        all_errors_known=0
+    elif (( known_count_loop > 0 )); then
+        all_errors_known=$all_known_loop
     fi
 
     # Check sync state (multi-source)
@@ -448,7 +1105,34 @@ while true; do
             else
                 log "         No errors detected; Drive may simply have a large backlog to process."
             fi
-            last_stuck_warn=$now
+
+            # If UNAVAILABLE_RESOURCE or NOT_FOUND errors are present and change_id
+            # has been stable for 15+ min, Drive is stuck on inaccessible items.
+            # Everything that can sync has synced. Exit with a message.
+            if [[ "$error_msg" == *"UNAVAILABLE_RESOURCE"* || "$error_msg" == *"NOT_FOUND"* ]] && [[ -n "$last_change_id" ]]; then
+                stable_secs=$(( now - change_id_stable_since ))
+                if (( stable_secs >= 900 )); then
+                    log "Drive is stuck on inaccessible items (deleted from shared drives)."
+                    log "All syncable files have been synced. The remaining errors are"
+                    log "for items that no longer exist on Google Drive."
+                    EXIT_REASON="All syncable files synced. Unresolvable errors present."
+                    quit_drive
+                    cleanup
+                    exit 0
+                fi
+                last_stuck_warn=$now
+            # If all current errors are known items, Drive has been stuck on these before.
+            # Exit immediately — no need to wait for change_id stability.
+            elif (( all_errors_known )); then
+                log "All detected errors are known items (seen in previous runs)."
+                log "Drive has been stuck on these before — nothing more to wait for."
+                EXIT_REASON="All errors are known items. Drive quit early."
+                quit_drive
+                cleanup
+                exit 0
+            else
+                last_stuck_warn=$now
+            fi
         else
             remaining=$(( max_checks - (sync_elapsed / POLL_INTERVAL) - 1 ))
             (( remaining < 0 )) && remaining=0
@@ -460,6 +1144,17 @@ while true; do
     if (( consecutive_idle >= COOLDOWN_THRESHOLD )); then
         log "Sync complete — ${COOLDOWN_THRESHOLD} consecutive idle checks passed."
         log "Waiting ${POST_IDLE_GRACE}s for Drive's internal queues to drain..."
+
+        # If unresolvable errors are present, all remaining errors are permanent.
+        # Once Drive is idle, everything that can sync has synced.
+        has_unresolvable=0
+        all_known=0
+        if [[ "$error_msg" == *"UNAVAILABLE_RESOURCE"* || "$error_msg" == *"NOT_FOUND"* ]]; then
+            has_unresolvable=1
+        fi
+        if (( all_errors_known )); then
+            all_known=1
+        fi
 
         # Drive can continue internal processing for 5-10+ minutes after
         # file I/O stops. We wait the full grace period, then re-check
@@ -474,22 +1169,65 @@ while true; do
                 if ! check_sync_state; then
                     log "Drive is syncing again after grace period — resetting idle counter."
                     consecutive_idle=0
-                    break
+                    sync_elapsed=$(( sync_elapsed + 30 ))
+                    continue
+                fi
+                # Drive is idle. If all errors are known, everything that can
+                # sync has synced. Exit immediately — no grace period needed.
+                if (( all_known )); then
+                    log "Drive is idle and all errors are known items."
+                    log "All syncable files have been synced. The remaining errors"
+                    log "are for items deleted from or removed from shared drives."
+                    EXIT_REASON="All syncable files synced. Unresolvable errors present."
+                    quit_drive
+                    cleanup
+                    exit 0
+                fi
+                # If unresolvable errors are present but not all known, still
+                # exit once Drive is idle — these errors are permanent.
+                if (( has_unresolvable )); then
+                    log "Drive is idle and unresolvable errors are present."
+                    log "All syncable files have been synced. The remaining errors"
+                    log "are for items deleted from or removed from shared drives."
+                    EXIT_REASON="All syncable files synced. Unresolvable errors present."
+                    quit_drive
+                    cleanup
+                    exit 0
                 fi
                 log "Drive still idle after grace period — proceeding to quit."
                 break
             fi
             # Check if log has become stale during grace period — if so,
             # extend the deadline to account for mirror subsystem processing lag.
+            # But if unresolvable errors are present, Drive is stuck and won't
+            # make progress regardless.
             if [[ -f "$DRIVE_LOG" ]]; then
                 log_age=$(( $(date +%s) - $(stat -f "%m" "$DRIVE_LOG" 2>/dev/null || echo 0) ))
                 if (( log_age > QUIT_LOG_FRESHNESS )); then
+                    if (( all_known )); then
+                        log "Drive log has been stale for ${log_age}s with known errors."
+                        log "Drive has stopped writing state blocks — it is idle."
+                        log "All syncable files have been synced."
+                        EXIT_REASON="All syncable files synced. Unresolvable errors present."
+                        quit_drive
+                        cleanup
+                        exit 0
+                    fi
+                    if (( has_unresolvable )); then
+                        log "Drive log has been stale for ${log_age}s with unresolvable errors."
+                        log "Drive has stopped writing state blocks — it is idle."
+                        log "All syncable files have been synced."
+                        EXIT_REASON="All syncable files synced. Unresolvable errors present."
+                        quit_drive
+                        cleanup
+                        exit 0
+                    fi
                     # Log went stale — mirror subsystem may still be processing.
                     # Extend grace period by (time since log went stale + buffer)
                     # to ensure we wait long enough for the mirror subsystem to finish.
-                    local stale_duration=$(( log_age - QUIT_LOG_FRESHNESS ))
-                    local extension=$(( stale_duration + 600 ))  # 10 min buffer
-                    grace_end=$(( grace_start + drain_elapsed + extension ))
+                    stale_duration=$(( log_age - QUIT_LOG_FRESHNESS ))
+                    extension=$(( stale_duration + 600 ))  # 10 min buffer
+                    grace_end=$(( drain_start + drain_elapsed + extension ))
                     log "Log stale for ${log_age}s — extending grace period by $(( extension / 60 )) min."
                 fi
             fi
@@ -511,18 +1249,39 @@ while true; do
                     if [[ -n "$op_queue" && "$op_queue" != "0" ]]; then
                         log "Drive has ${op_queue} pending operation(s) in state block — resetting idle counter."
                         consecutive_idle=0
-                        break
+                        sync_elapsed=$(( sync_elapsed + 30 ))
+                        continue
                     fi
                     if [[ -n "$downloads" && "$downloads" != "0" ]]; then
                         log "Drive has ${downloads} pending download(s) in state block — resetting idle counter."
                         consecutive_idle=0
-                        break
+                        sync_elapsed=$(( sync_elapsed + 30 ))
+                        continue
                     fi
                     if [[ "$change_ids" == "false" ]]; then
+                        if (( all_known )); then
+                            log "State block: change_ids_up_to_date=false with known errors."
+                            log "Drive can't make progress — these errors are permanent."
+                            log "All syncable files have been synced."
+                            EXIT_REASON="All syncable files synced. Unresolvable errors present."
+                            quit_drive
+                            cleanup
+                            exit 0
+                        fi
+                        if (( has_unresolvable )); then
+                            log "State block: change_ids_up_to_date=false with unresolvable errors."
+                            log "Drive can't make progress — these errors are permanent."
+                            log "All syncable files have been synced."
+                            EXIT_REASON="All syncable files synced. Unresolvable errors present."
+                            quit_drive
+                            cleanup
+                            exit 0
+                        fi
                         log "State block: change_ids_up_to_date=false — sync not complete, extending grace period by 10 min."
                         consecutive_idle=0
                         grace_end=$(( $(date +%s) + 600 ))
-                        break
+                        sync_elapsed=$(( sync_elapsed + 30 ))
+                        continue
                     fi
                     if [[ "$change_ids" == "true" ]]; then
                         log "State block: change_ids_up_to_date=true — sync confirmed complete, exiting grace period early."
@@ -531,7 +1290,8 @@ while true; do
                     if [[ "$fetching" == "true" ]]; then
                         log "State block: fetching_changes=true — sync engine actively fetching."
                         consecutive_idle=0
-                        break
+                        sync_elapsed=$(( sync_elapsed + 30 ))
+                        continue
                     fi
                 fi
             fi
