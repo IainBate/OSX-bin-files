@@ -1,25 +1,380 @@
-filename=$1
-genre=$2
-PID=$$
+#!/bin/bash
+# convert_video - Unified video conversion script with CLI options
+#
+# Usage:
+#   convert_video --olympus <src_dir> [options]
+#   convert_video --iPad <file> [genre] [options]
+#   convert_video --HD <file> [genre] [options]
+#   convert_video --subtitles <file> [genre] [options]
+#
+# Options:
+#   -d, --destination DIR   Output directory (default: same as source)
+#   -f, --force             Overwrite existing files
+#   -v, --verbose           Verbose output
 
-echo "Original file name:" $filename
-filename1=`basename "$filename"`
-prefix=$(echo ${filename1%.*})
-echo "Prefix:" $prefix
-prefix1=$(echo ${filename%.*})
-echo "Prefix:" $prefix 
-echo "Prefix1:" $prefix1
-new_filename_HD="${prefix1}_HD.mp4"
-new_filename_iPad="${prefix1}_iPad.mp4"
-echo "New file names:" ${new_filename_iPad} ${new_filename_HD}
+set -e
 
-nice -n 20 ffmpeg -i "${filename}" -sn -map_chapters -1 -map_metadata -1 -map 0:v:0 -map 0:a:0 -metadata title="${prefix}" -metadata genre="$genre" -vcodec libx264 -b:v 2000k -acodec libfdk_aac -b:a 128k -f mp4 tmp_$PID.mp4 </dev/null
-# nice -n 20 ffmpeg -i "${filename}" -sn -map_chapters -1 -map_metadata -1 -map 0:v:0 -map 0:a:0 -metadata title="${prefix}" -metadata genre="$genre" -vcodec libx264 -b:v 2000k -acodec aac -b:a 128k -f mp4 tmp_$PID.mp4 </dev/null
-mv tmp_$PID.mp4 "${new_filename_HD}"
+# Default options
+DEST_DIR=""
+FORCE=false
+VERBOSE=false
+GENRE=""
 
-nice -n 20 ffmpeg -i "${filename}" -sn -map_chapters -1 -map_metadata -1 -map 0:v:0 -map 0:a:0 -metadata title="${prefix}" -metadata genre="$genre" -vf scale=1024:-2 -vcodec libx264 -b:v 900k -acodec libfdk_aac -b:a 96k -f mp4 tmp_$PID.mp4 </dev/null
-# nice -n 20 ffmpeg -i "${filename}" -sn -map_chapters -1 -map_metadata -1 -map 0:v:0 -map 0:a:0 -metadata title="${prefix}" -metadata genre="$genre" -vf scale=1024:-2 -vcodec libx264 -b:v 900k -acodec aac -b:a 96k -f mp4 tmp_$PID.mp4 </dev/null
-mv tmp_$PID.mp4 "${new_filename_iPad}"
+# Parse command line arguments
+MODE=""
+INPUT_FILE=""
+shift_count=0
 
-# rm "${filename}"
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --olympus)
+            MODE="olympus"
+            shift
+            if [[ $# -gt 0 && ! "$1" =~ ^-- ]]; then
+                INPUT_FILE="$1"
+                shift
+            fi
+            ;;
+        --iPad|--ipad)
+            MODE="iPad"
+            shift
+            if [[ $# -gt 0 && ! "$1" =~ ^-- ]]; then
+                INPUT_FILE="$1"
+                shift
+            fi
+            # Optional genre as next arg
+            if [[ $# -gt 0 && ! "$1" =~ ^- ]]; then
+                GENRE="$1"
+                shift
+            fi
+            ;;
+        --HD|--hd)
+            MODE="HD"
+            shift
+            if [[ $# -gt 0 && ! "$1" =~ ^-- ]]; then
+                INPUT_FILE="$1"
+                shift
+            fi
+            # Optional genre as next arg
+            if [[ $# -gt 0 && ! "$1" =~ ^- ]]; then
+                GENRE="$1"
+                shift
+            fi
+            ;;
+        --subtitles|--subs)
+            MODE="subtitles"
+            shift
+            if [[ $# -gt 0 && ! "$1" =~ ^-- ]]; then
+                INPUT_FILE="$1"
+                shift
+            fi
+            # Optional genre as next arg
+            if [[ $# -gt 0 && ! "$1" =~ ^- ]]; then
+                GENRE="$1"
+                shift
+            fi
+            ;;
+        -d|--destination)
+            DEST_DIR="$2"
+            shift 2
+            ;;
+        -f|--force)
+            FORCE=true
+            shift
+            ;;
+        -v|--verbose)
+            VERBOSE=true
+            shift
+            ;;
+        *)
+            # Positional argument (for backwards compatibility)
+            if [[ -z "$INPUT_FILE" ]]; then
+                INPUT_FILE="$1"
+            fi
+            shift
+            ;;
+    esac
+done
 
+# Validate mode
+if [[ -z "$MODE" ]]; then
+    echo "Error: No conversion mode specified. Use --olympus, --iPad, --HD, or --subtitles"
+    exit 1
+fi
+
+# Helper function for verbose output
+log() {
+    if [[ "$VERBOSE" == "true" ]]; then
+        echo "[convert_video] $*" >&2
+    fi
+}
+
+# === Olympus Video Conversion (batch process .MOV files) ===
+convert_olympus() {
+    local srcdir="$1"
+
+    # Check if source is a directory
+    if [[ ! -d "$srcdir" ]]; then
+        echo "Error: --olympus requires a directory as input"
+        exit 1
+    fi
+
+    log "Processing Olympus videos in $srcdir..."
+
+    # Find all .MOV files and process them
+    local PID=$$
+    cd "$srcdir"
+
+    for file in *.MOV; do
+        [[ -e "$file" ]] || continue
+
+        log "Converting: $file"
+
+        filename="$file"
+        prefix=$(basename "${filename%.*}")
+
+        if [[ -n "$DEST_DIR" ]]; then
+            newname="${DEST_DIR}/${prefix}.mp4"
+        else
+            newname="${prefix}.mp4"
+        fi
+
+        nice -n 20 ffmpeg -y -i "${filename}" \
+            -threads 4 \
+            -map_metadata 0 \
+            -map 0:v:0 \
+            -c:v libx264 -crf 21 \
+            -map 0:a:0 \
+            -q:a 1 \
+            "${newname}"
+
+        log "Created: $newname"
+    done
+}
+
+# === iPad Conversion (scale to 1024px width) ===
+convert_iPad() {
+    local filename="$1"
+
+    if [[ ! -f "$filename" ]]; then
+        echo "Error: File not found: $filename"
+        exit 1
+    fi
+
+    local PID=$$
+    local prefix=$(basename "${filename%.*}")
+
+    if [[ -n "$DEST_DIR" ]]; then
+        new_filename="${DEST_DIR}/${prefix}_iPad.mp4"
+    else
+        new_filename="${prefix}_iPad.mp4"
+    fi
+
+    log "Converting to iPad format: $new_filename"
+
+    # Get genre from file if not specified
+    if [[ -z "$GENRE" ]]; then
+        GENRE=$(ffmpeg -i "${filename}" 2>&1 | grep genre | awk '{ print $3 }' || echo "")
+        log "Detected genre: $GENRE"
+    fi
+
+    # Scale to 1024 width, preserve aspect ratio
+    nice -n 20 ffmpeg -y -i "${filename}" \
+        -sn \
+        -map_chapters -1 \
+        -map_metadata -1 \
+        -map 0:v:0 \
+        -map 0:a:0 \
+        -metadata title="${prefix}" \
+        -metadata genre="${GENRE}" \
+        -vf scale=1024:-2 \
+        -vcodec libx264 \
+        -b:v 900k \
+        -pix_fmt yuv420p \
+        -acodec libfdk_aac \
+        -b:a 96k \
+        -f mp4 "tmp_${PID}.mp4"
+
+    touch -r "${filename}" "tmp_${PID}.mp4"
+    mv "tmp_${PID}.mp4" "${new_filename}"
+}
+
+# === HD Conversion (2000kbps, original resolution) ===
+convert_HD() {
+    local filename="$1"
+
+    if [[ ! -f "$filename" ]]; then
+        echo "Error: File not found: $filename"
+        exit 1
+    fi
+
+    local PID=$$
+    local prefix=$(basename "${filename%.*}")
+
+    if [[ -n "$DEST_DIR" ]]; then
+        new_filename="${DEST_DIR}/${prefix}_HD.mp4"
+    else
+        new_filename="${prefix}_HD.mp4"
+    fi
+
+    log "Converting to HD format: $new_filename"
+
+    # Get genre from file if not specified
+    if [[ -z "$GENRE" ]]; then
+        GENRE=$(ffmpeg -i "${filename}" 2>&1 | grep genre | awk '{ print $3 }' || echo "")
+        log "Detected genre: $GENRE"
+    fi
+
+    # Check bitrate and use copy or re-encode accordingly
+    local target_bitrate=2000
+    local current_bitrate=$(ffmpeg -i "${filename}" 2>&1 | grep Duration | grep bitrate | awk '{ print $6 }' || echo "0")
+
+    log "Bitrate: ${current_bitrate}kbps"
+
+    if [[ "$current_bitrate" =~ ^[0-9]+$ ]] && [[ "$current_bitrate" -ge "$target_bitrate" ]]; then
+        # Re-encode if higher bitrate than target
+        nice -n 20 ffmpeg -y -i "${filename}" \
+            -sn \
+            -map_chapters -1 \
+            -map_metadata -1 \
+            -map 0:v:0 \
+            -map 0:a:0 \
+            -metadata title="${prefix}" \
+            -metadata genre="${GENRE}" \
+            -vcodec libx264 \
+            -b:v ${target_bitrate}k \
+            -pix_fmt yuv420p \
+            -acodec libfdk_aac \
+            -b:a 128k \
+            -filter:a loudnorm \
+            -f mp4 "tmp_${PID}.mp4"
+    else
+        # Copy video stream if already at or below target bitrate
+        nice -n 20 ffmpeg -y -i "${filename}" \
+            -sn \
+            -map_chapters -1 \
+            -map_metadata -1 \
+            -map 0:v:0 \
+            -map 0:a:0 \
+            -metadata title="${prefix}" \
+            -metadata genre="${GENRE}" \
+            -vcodec libx264 \
+            -c:v copy \
+            -pix_fmt yuv420p \
+            -acodec libfdk_aac \
+            -b:a 128k \
+            -filter:a loudnorm \
+            -f mp4 "tmp_${PID}.mp4"
+    fi
+
+    touch -r "${filename}" "tmp_${PID}.mp4"
+    mv "tmp_${PID}.mp4" "${new_filename}"
+}
+
+# === Subtitles Conversion (includes subtitle track) ===
+convert_subtitles() {
+    local filename="$1"
+
+    if [[ ! -f "$filename" ]]; then
+        echo "Error: File not found: $filename"
+        exit 1
+    fi
+
+    local PID=$$
+    local prefix=$(basename "${filename%.*}")
+
+    if [[ -n "$DEST_DIR" ]]; then
+        new_filename="${DEST_DIR}/${prefix}_HD.mp4"
+        new_filename_iPad="${DEST_DIR}/${prefix}_iPad.mp4"
+    else
+        new_filename="${prefix}_HD.mp4"
+        new_filename_iPad="${prefix}_iPad.mp4"
+    fi
+
+    log "Converting with subtitles..."
+
+    # Get genre from file if not specified
+    if [[ -z "$GENRE" ]]; then
+        GENRE=$(ffmpeg -i "${filename}" 2>&1 | grep genre | awk '{ print $3 }' || echo "")
+        log "Detected genre: $GENRE"
+    fi
+
+    # HD version (2000kbps with subtitles)
+    nice -n 20 ffmpeg -y -i "${filename}" \
+        -sn \
+        -map_chapters -1 \
+        -map_metadata -1 \
+        -map 0:v:0 \
+        -map 0:a:0 \
+        -map 0:s:0 \
+        -metadata title="${prefix}" \
+        -metadata genre="${GENRE}" \
+        -vcodec libx264 \
+        -b:v 2000k \
+        -acodec libfdk_aac \
+        -b:a 128k \
+        -scodec mov_text \
+        -f mp4 "tmp_${PID}.mp4"
+
+    nice -n 20 ffmpeg -y -i "tmp_${PID}.mp4" \
+        -sn -c copy "${new_filename}"
+
+    rm "tmp_${PID}.mp4"
+
+    # iPad version (900kbps with subtitles)
+    nice -n 20 ffmpeg -y -i "${filename}" \
+        -sn \
+        -map_chapters -1 \
+        -map_metadata -1 \
+        -map 0:v:0 \
+        -map 0:a:0 \
+        -map 0:s:0 \
+        -metadata title="${prefix}" \
+        -metadata genre="${GENRE}" \
+        -vf scale=1024:-2 \
+        -vcodec libx264 \
+        -b:v 900k \
+        -acodec libfdk_aac \
+        -b:a 96k \
+        -scodec mov_text \
+        -f mp4 "tmp_${PID}.mp4"
+
+    nice -n 20 ffmpeg -y -i "tmp_${PID}.mp4" \
+        -sn -c copy "${new_filename_iPad}"
+
+    rm "tmp_${PID}.mp4"
+}
+
+# === Main execution ===
+case "$MODE" in
+    olympus)
+        if [[ -z "$INPUT_FILE" ]]; then
+            echo "Error: --olympus requires a source directory"
+            exit 1
+        fi
+        convert_olympus "$INPUT_FILE"
+        ;;
+    iPad)
+        if [[ -z "$INPUT_FILE" ]]; then
+            echo "Error: --iPad requires an input file"
+            exit 1
+        fi
+        convert_iPad "$INPUT_FILE"
+        ;;
+    HD)
+        if [[ -z "$INPUT_FILE" ]]; then
+            echo "Error: --HD requires an input file"
+            exit 1
+        fi
+        convert_HD "$INPUT_FILE"
+        ;;
+    subtitles)
+        if [[ -z "$INPUT_FILE" ]]; then
+            echo "Error: --subtitles requires an input file"
+            exit 1
+        fi
+        convert_subtitles "$INPUT_FILE"
+        ;;
+esac
+
+echo "Conversion complete!"

@@ -2,22 +2,129 @@
 # safeguards — rsync home directory to Mac Backup Drive, update git repos
 # Usage: run manually or via cron (crontab entry saved to backup dir)
 
+BACKUP_DIR=~/My\ Drive/misc/Mac\ backup
+
+# ============================================================================
+# 1. Home Directory Backup (with exclusions)
+# ============================================================================
 rsync --archive --delete --times --verbose --no-links --delete-excluded \
-  --exclude="*.gdoc" --include="/*/.*" --exclude="/.*" \
-  --exclude ".fcpcache" --exclude "/.Trash" --exclude "/Library" \
-  --exclude "/My Drive" --exclude "/Google Drive" \
-  --exclude "/My Drive (iain.bate@york.ac.uk)" \
-  ~/ ~/My\ Drive/misc/Mac\ backup/
-cp -p ~/.zshrc ~/My\ Drive/misc/Mac\ backup/
-rsync --archive --delete --verbose --no-links --exclude=".git/" --exclude="cache/" --exclude="paste-cache/" --exclude="session-env/" --exclude="sessions/" --exclude="shell-snapshots/" --exclude="history.jsonl" ~/.claude/ ~/My\ Drive/misc/Mac\ backup/claude_backup/
+  --exclude="*.gdoc" \
+  --exclude="/.Trash/" --exclude="/Library/" \
+  --exclude="/My Drive/" --exclude="/Google Drive/" \
+  --exclude="/My Drive (iain.bate@york.ac.uk)/" \
+  --exclude="/venv/" --exclude="/.venv/" \
+  --exclude="/.cache/" --exclude="/.pyenv/" --exclude="/.npm/" --exclude="/.ollama/" \
+  --exclude="/compiled_videos/" \
+  --exclude="*/venv/" --exclude="*/.venv/" \
+  ~/ "$BACKUP_DIR/"
 
-cp -av ~/Dropbox/Apps/Overleaf/Master\ files/references.bib ~/My\ Drive/misc/Mac\ backup/refer.bib
+cp -p ~/.zshrc "$BACKUP_DIR/"
 
-# Save current crontab to backup
-crontab -l >~/My\ Drive/misc/Mac\ backup/my_crontab 2>/dev/null || true
+# ============================================================================
+# 2. Claude Config Backup (without session data)
+# ============================================================================
+mkdir -p "$BACKUP_DIR/claude_backup"
+rsync --archive --delete --verbose --no-links \
+  --exclude=".git/" \
+  --exclude="cache/" --exclude="paste-cache/" \
+  --exclude="session-env/" --exclude="sessions/" \
+  --exclude="shell-snapshots/" --exclude="history.jsonl" \
+  --exclude="worktrees/" \
+  ~/.claude/ "$BACKUP_DIR/claude_backup/"
 
-# Dump current Brewfile (formulae, casks, taps) to backup
-rm -rf ~/My\ Drive/misc/Mac\ backup/Brewfile
+# ============================================================================
+# 3. Overleaf References
+# ============================================================================
+cp -av ~/Dropbox/Apps/Overleaf/Master\ files/references.bib "$BACKUP_DIR/refer.bib"
+
+# ============================================================================
+# 4. System Preferences Export (from backup_and_restore)
+# ============================================================================
+mkdir -p "$BACKUP_DIR/settings"
+defaults export com.apple.finder "$BACKUP_DIR/settings/Finder.plist" 2>/dev/null || true
+defaults export com.apple.dock "$BACKUP_DIR/settings/Dock.plist" 2>/dev/null || true
+defaults export com.apple.mail "$BACKUP_DIR/settings/Mail.plist" 2>/dev/null || true
+
+# Login items
+osascript -e 'tell application "System Events" to get name of every login item' \
+  > "$BACKUP_DIR/settings/login_items.txt" 2>/dev/null || true
+
+# Spotlight exclusions
+mdutil -s / > "$BACKUP_DIR/settings/spotlight_exclusions.txt" 2>/dev/null || true
+
+# ============================================================================
+# 5. Wi-Fi Networks (from backup_and_restore)
+# ============================================================================
+wifi_list=""
+for iface in $(networksetup -listallhardwareports | awk '/Hardware Port: Wi-Fi/{getline; print $0}'); do
+    ssid=$(networksetup -getairportnetwork "$iface" 2>/dev/null | sed 's/.*: //')
+    if [ "$ssid" != "Off" ] && [ -n "$ssid" ]; then
+        wifi_list="${wifi_list}${ssid}\n"
+    fi
+done
+if [ -n "$wifi_list" ]; then
+    printf "%b" "$wifi_list" | sort -u > "$BACKUP_DIR/settings/wifi_networks.txt" 2>/dev/null || true
+fi
+
+# ============================================================================
+# 6. Chrome Data (from backup_and_restore)
+# ============================================================================
+CHROME_BOOKMARKS="$HOME/Library/Application Support/Google/Chrome/Default/Bookmarks"
+if [ -f "$CHROME_BOOKMARKS" ]; then
+    cp "$CHROME_BOOKMARKS" "$BACKUP_DIR/settings/chrome_bookmarks.json" 2>/dev/null || true
+fi
+
+CHROME_EXTENSIONS="$HOME/Library/Application Support/Google/Chrome/Default/Extensions"
+if [ -d "$CHROME_EXTENSIONS" ]; then
+    ls -1 "$CHROME_EXTENSIONS" > "$BACKUP_DIR/settings/chrome_extensions.txt" 2>/dev/null || true
+fi
+
+# ============================================================================
+# 7. VS Code Settings (from backup_and_restore)
+# ============================================================================
+VSCODE_SETTINGS="$HOME/Library/Application Support/Code/User/settings.json"
+if [ -f "$VSCODE_SETTINGS" ]; then
+    cp "$VSCODE_SETTINGS" "$BACKUP_DIR/settings/vscode_settings.json" 2>/dev/null || true
+fi
+
+# ============================================================================
+# 8. Ollama Models (from backup_and_restore)
+# ============================================================================
+if command -v ollama &>/dev/null; then
+    ollama list > "$BACKUP_DIR/models/ollama_models.txt" 2>/dev/null || true
+fi
+
+# ============================================================================
+# 9. pyenv Versions (from backup_and_restore)
+# ============================================================================
+if command -v pyenv &>/dev/null; then
+    mkdir -p "$BACKUP_DIR/settings"
+    pyenv versions --short > "$BACKUP_DIR/settings/pyenv_versions.txt" 2>/dev/null || true
+fi
+
+# ============================================================================
+# 10. npm Global Packages (from backup_and_restore)
+# ============================================================================
+if command -v npm &>/dev/null; then
+    mkdir -p "$BACKUP_DIR/settings"
+    npm list -g --depth=0 > "$BACKUP_DIR/settings/npm_global_packages.txt" 2>/dev/null || true
+fi
+
+# ============================================================================
+# 11. System Info (from backup_and_restore)
+# ============================================================================
+{
+    echo "Date: $(date)"
+    echo "Hostname: $(hostname)"
+    echo "macOS: $(sw_vers -productVersion)"
+} > "$BACKUP_DIR/settings/system_info.txt"
+
+# ============================================================================
+# 12. Crontab and Brewfile
+# ============================================================================
+crontab -l >"$BACKUP_DIR/my_crontab" 2>/dev/null || true
+
+rm -rf "$BACKUP_DIR/Brewfile"
 brew bundle dump --file="$HOME"/My\ Drive/misc/Mac\ backup/Brewfile
 
 # Update the OSX-bin-files git repo
@@ -39,33 +146,3 @@ for repo in ~/*/; do
    git push 2>/dev/null) || echo "WARN: failed to sync $(basename "$repo")"
 done
 
-# DATE=$(date "+%d_%m_%Y")
-# mkdir ~/WCET\ Confidence/auto_backup_of_routines/$DATE
-# find ~/WCET\ Confidence/ -maxdepth 1 -type f ! -name '.DS_Store' -exec gcp -avu {} ~/WCET\ Confidence/auto_backup_of_routines/$DATE/ \;
-
-# mkdir ~/DAG\ simulator
-# mkdir ~/DAG\ simulator/auto_backup_of_routines
-# mkdir ~/DAG\ simulator/auto_backup_of_routines/$DATE
-# find ~/DAG\ simulator/ -maxdepth 1 -type f ! -name '.DS_Store' -exec gcp -avu {} ~/DAG\ simulator/auto_backup_of_routines/$DATE/ \;
-# find ~/DAG\ simulator/auto_backup_of_routines -name "Ico*" -exec rm -rvf {} \;
-
-# pushd ~/DAG\ simulator/auto_backup_of_routines
-# rmlint
-# ./rmlint.sh -d
-# find . -type d -empty -delete
-# if [ -f "./rmlint.json" ] ; then
-#     rm "./rmlint.json"
-# fi
-# popd
-
-# caffeinate -i nice -n 20 rclone "$1" \
-#   --transfers 8 --checkers 8 --tpslimit 8 --tpslimit-burst 8 \
-#   --drive-chunk-size 64M --retries 10 --fast-list --verbose \
-#   sync "$HOME"/ gdrive:Archive/Mac_Book_Pro/ \
-#   --exclude "/.vscode/**" --exclude "/Pictures/**" --exclude "/Ico*" \
-#   --exclude "/Google Drive File Stream/**" --exclude "/.venv_pypy3/**" \
-#   --exclude "/.p2/**" --exclude "/Dropbox/**" --exclude "/.virtualenvs/**" \
-#   --exclude "/.eclipse/**" --exclude "/.bash_sessions/**" \
-#   --exclude "/Library/**" --exclude "/.Trash/**" --exclude "/.dropbo*" \
-#   --exclude "/Downloads/**" --exclude "/GNAT/**" --exclude "/Movies/**" \
-#   --exclude "/.pyenv/**" --exclude "/eclipse/**"
