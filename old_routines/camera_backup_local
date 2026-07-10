@@ -1,14 +1,14 @@
 DATE1=$(date +"%d_%m_%y")
 # sd_backup
 
-mkdir /Volumes/Home/photos/raw/$DATE1/
-rsync --rsh=ssh --archive --delete --delete-excluded --verbose --times --exclude /RECYCLER --exclude /.fseventsd --exclude /.Trashes --exclude "/._.Trashes" --exclude "/System Volume Information" "/Volumes/Untitled/" /Volumes/Home/photos/raw/$DATE1/
+mkdir /Volumes/Home/raw_photos/$DATE1/
+rsync --rsh=ssh --archive --delete --delete-excluded --verbose --times --exclude /RECYCLER --exclude /.fseventsd --exclude /.Trashes --exclude "/._.Trashes" --exclude "/System Volume Information" "/Volumes/Untitled/" /Volumes/Home/raw_photos/$DATE1/
 
 mkdir /Volumes/Home/files/tmp/$DATE1
 mkdir //Volumes/Home/files/tmp/$DATE1/photos/
 mkdir /Volumes/Home/files/tmp/$DATE1/videos/
-find /Volumes/Home/photos/raw/$DATE1/ -name "*.JPG" -exec cp -a {} /Volumes/Home/files/tmp/$DATE1/photos/ \;
-find /Volumes/Home/photos/raw/$DATE1/ -name "*.MOV" -exec cp -a {} /Volumes/Home/files/tmp/$DATE1/videos/ \;
+find /Volumes/Home/raw_photos/$DATE1/ -name "*.JPG" -exec cp -av {} /Volumes/Home/files/tmp/$DATE1/photos/ \;
+find /Volumes/Home/raw_photos/$DATE1/ -name "*.MOV" -exec cp -av {} /Volumes/Home/files/tmp/$DATE1/videos/ \;
 cp -a ~/Dropbox/bin/*olympus* /Volumes/Home/files/tmp/$DATE1/videos/
 rsync --rsh=ssh --archive --delete --verbose --times /Volumes/Home/files/tmp/$DATE1/videos/ ~/recent_photos/$DATE1/
 

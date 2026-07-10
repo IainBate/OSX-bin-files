@@ -21,3 +21,12 @@ find "$1" -iname '*.MOV' | while read PIC; do
     echo $PIC $DATE3
 done
 
+find "$1" -iname '*.png' | while read PIC; do
+    DATE1=$(mediainfo "$PIC" | grep 'Encoded date')
+    DATE2=$(echo $DATE1 | head -n1 | cut -d ':' -f2-3 | cut -d ' ' -f3-)
+    DATE3=$(echo $DATE2 | sed 's/://'| sed 's/-//g'| sed 's/ //')
+    touch -t $(echo $DATE3) "$PIC"
+    echo $PIC $DATE3
+done
+
+

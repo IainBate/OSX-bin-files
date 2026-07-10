@@ -1,16 +1,29 @@
 find /Volumes/Home/ -name "._*" -type f -delete
 
-echo "Photos"
-nice -n 20 rsync --progress -r --size-only --verbose --delete "/Volumes/Home/photos/" "/Volumes/GoogleDrive/My Drive/Home/photos/"
+#echo "Photos"
+# nice -n 20 rclone --delete-excluded --transfers 3 --checkers 3 --tpslimit 3 --drive-chunk-size 64M --fast-list --verbose sync /Volumes/Home/photos/ gdrive:Home/photos/
+
+echo "iPhones"
+nice -n 20 rclone --delete-excluded --transfers 3 --checkers 3 --tpslimit 3 --drive-chunk-size 64M --fast-list --verbose sync /Volumes/Home/iPhones/ gdrive:Home/iPhones/
+
+echo "Other Photos"
+nice -n 20 rclone --delete-excluded --transfers 3 --checkers 3 --tpslimit 3 --drive-chunk-size 64M --fast-list --verbose sync /Volumes/Home/other_photos/ gdrive:Home/other_photos/
+
+echo "Go Pros"
+nice -n 20 rclone --delete-excluded --transfers 3 --checkers 3 --tpslimit 3 --drive-chunk-size 64M --fast-list --verbose sync /Volumes/Home/Go\ Pros/ gdrive:Home/Go\ Pros/
 
 echo "Films"
-nice -n 20 rsync --progress -r --size-only --verbose --delete "/Volumes/Home/films/" "/Volumes/GoogleDrive/My Drive/Home/films/"
+nice -n 20 rclone --delete-excluded --transfers 3 --checkers 3 --tpslimit 3 --drive-chunk-size 64M --fast-list --verbose sync /Volumes/Home/films/ gdrive:Home/films/
 
 echo "iTunes"
-nice -n 20 rsync --progress -r --size-only --verbose --delete "/Volumes/Home/iTunes/" "/Volumes/GoogleDrive/My Drive/Home/iTunes/"
+nice -n 20 rclone --delete-excluded --transfers 3 --checkers 3 --tpslimit 3 --drive-chunk-size 64M --fast-list --verbose sync /Volumes/Home/iTunes/ gdrive:Home/iTunes/
 
 echo "files"
-nice -n 20 rsync --progress -r --size-only --verbose --delete --max-size=8G "/Volumes/Home/files/" "/Volumes/GoogleDrive/My Drive/Home/files/"
+nice -n 20 rclone --delete-excluded --transfers 3 --checkers 3 --tpslimit 3 --drive-chunk-size 64M --fast-list --verbose sync --delete-excluded --exclude /tmp --max-size 8G /Volumes/Home/files/ gdrive:Home/files/
 
 echo "Olympus TG4"
-nice -n 20 rsync --progress -r --size-only --verbose --delete "/Volumes/Home/olympus_tg4/" "/Volumes/GoogleDrive/My Drive/Home/olympus_tg4/"
+nice -n 20 rclone --delete-excluded --transfers 3 --checkers 3 --tpslimit 3 --drive-chunk-size 64M --fast-list --verbose sync /Volumes/Home/olympus_tg4/ gdrive:Home/olympus_tg4/
+
+echo "Raw Photos"
+nice -n 20 rclone --delete-excluded --transfers 3 --checkers 3 --tpslimit 3 --drive-chunk-size 64M --fast-list --verbose sync /Volumes/Home/raw_photos/ gdrive:Home/raw_photos/
+
