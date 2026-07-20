@@ -133,6 +133,17 @@ git add -A 2>/dev/null
 git diff --cached --quiet 2>/dev/null || git commit -m "auto: $(date +%F)" 2>/dev/null
 git push 2>/dev/null
 
+# ============================================================================
+# 13. Update pip and npm packages
+# ============================================================================
+if command -v python &>/dev/null; then
+    python -m pip install -U pip 2>/dev/null || true
+fi
+
+if command -v npm &>/dev/null; then
+    npm update -g 2>/dev/null || true
+fi
+
 # Update all local git repos in $HOME subdirectories
 # Skips bin itself (this repo), bare repos, and repos without remotes
 for repo in ~/*/; do

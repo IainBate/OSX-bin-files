@@ -1,0 +1,1 @@
+rsync --rsh=ssh --archive --delete --delete-excluded --verbose --times --exclude /.Spotlight-V100 --exclude /.fseventsd --exclude /.DS_Store --exclude /.Trashes /Volumes/Other/ ijb@headfoo://local/d1p1/ijb/not_backed_up/Other/

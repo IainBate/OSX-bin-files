@@ -1,0 +1,1 @@
+rsync_modified --rsh=ssh --archive --delete --verbose --times /Users/ijb/Documents/ ijb@linux.cs.york.ac.uk://n/staffstore/ijb/backup/my_documents/
