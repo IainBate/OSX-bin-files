@@ -1,7 +1,0 @@
-string="$1"
-if [ -d "$string" ]; then
-string1=${string:0:${#string}-4}
-echo "cp -a \"$string1\"/* \"$string\"/"
-cp -a "$string1"/* "$string"/
-fi
-

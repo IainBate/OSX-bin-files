@@ -1,7 +1,0 @@
-string="$1"
-if [ -d "$string" ]; then
-string1=${string:0:${#string}-4}
-echo "mv \"$string\" \"$string1\""
-mv "$string" "$string1"
-fi
-

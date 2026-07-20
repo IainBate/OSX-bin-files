@@ -64,7 +64,7 @@ def createnewnames(directory, files):
 				postfix = ""
 
 			# Destination filename is defined on the following line
-			newname = datetime.date.fromtimestamp(file.mtime).strftime("Movie %d_%m_%Y" + postfix + ".mp4")
+			newname = datetime.date.fromtimestamp(file.mtime).strftime("Movie %d_%m_%Y" + postfix + ".avi")
 			file.newpath = os.path.join(directory, newname)
 
 			if pos > -1:
@@ -111,7 +111,8 @@ def process(files, dest, verbose):
 	# The command to be run for every file. %s will be replaced by parameters
 	# defined a bit later (in cmdline). String cmd uses """ so it can span
 	# multiple lines:
-	cmd = """nice -n 20 ffmpeg -y -i %s -vcodec libx264 -threads 0 -b 3000k -ab 128k %s; rm *.log"""
+	cmd = """ffmpeg -y -i %s -threads 2 -pass 1 -b 2100k %s;
+ffmpeg -y -i %s -threads 2 -pass 2 -b 2100k %s; rm *.log"""
 	# Example "command" (will moan about non existant new file).
 #	cmd = "echo %s %s; cp %s %s"
 
@@ -129,7 +130,7 @@ def process(files, dest, verbose):
 		quoted_new = pipes.quote(file.newpath)
 
 		# Here's the bit where %s's in cmd are replaced by strings
-		cmdline = cmd % (quoted_old, quoted_new)
+		cmdline = cmd % (quoted_old, quoted_new, quoted_old, quoted_new)
 
 		debugprint("+ " + cmdline, verbose)
 		subprocess.call(cmdline, shell=True)
